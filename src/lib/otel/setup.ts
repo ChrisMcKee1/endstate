@@ -17,7 +17,7 @@ export function initOtel(): void {
   if (sdk) return;
 
   const resource = resourceFromAttributes({
-    [ATTR_SERVICE_NAME]: "agentic-app-dev",
+    [ATTR_SERVICE_NAME]: "endstate",
     [ATTR_SERVICE_VERSION]: "1.0.0",
   });
 

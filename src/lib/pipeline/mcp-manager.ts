@@ -84,7 +84,7 @@ export function detectProjectMcpServers(projectPath: string): McpServerEntry[] {
 // ─── Merge defaults with overrides per agent ──────────────────────────────────
 
 interface McpStdioConfig {
-  type: "stdio";
+  type: "local" | "stdio";
   command: string;
   args: string[];
   env?: Record<string, string>;
@@ -104,7 +104,7 @@ function entryToSdkConfig(entry: McpServerEntry): McpConfig | null {
   if (entry.type === MCP_SERVER_TYPES.STDIO) {
     if (!entry.command) return null;
     return {
-      type: "stdio",
+      type: "local" as const,
       command: entry.command,
       args: entry.args ?? [],
       ...(entry.env && Object.keys(entry.env).length > 0 ? { env: entry.env } : {}),

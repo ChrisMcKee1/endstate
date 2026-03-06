@@ -89,10 +89,13 @@ const DEFAULT_CONFIG: PipelineConfig = {
   autoApprove: true,
   infiniteSessions: true,
   fixSeverity: SEVERITIES.HIGH,
+  enableResearcher: true,
   enableExplorer: true,
   enableAnalyst: true,
   enableFixer: true,
   enableUxReviewer: true,
+  enableCodeSimplifier: true,
+  agentGraph: [],
   skills: [],
   customAgentDefinitions: [],
   mcpServerOverrides: [],
@@ -116,6 +119,17 @@ export function SetupWizard() {
   const [config, setConfig] = useState<PipelineConfig>({ ...DEFAULT_CONFIG });
   const [launching, setLaunching] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [hasExistingConfig, setHasExistingConfig] = useState(false);
+
+  // Check if there's an existing config we can go back to
+  useEffect(() => {
+    fetch("/api/settings")
+      .then((r) => r.json())
+      .then((data: { config: PipelineConfig | null }) => {
+        if (data.config) setHasExistingConfig(true);
+      })
+      .catch(() => {});
+  }, []);
 
   const update = <K extends keyof PipelineConfig>(
     key: K,
@@ -246,10 +260,10 @@ export function SetupWizard() {
           className="mb-8 text-center"
         >
           <h1 className="text-2xl font-bold uppercase tracking-[0.2em] text-accent">
-            Agentic
+            Endstate
           </h1>
           <p className="mt-1 text-xs text-text-muted">
-            Autonomous Development Pipeline
+            Define the outcome. Endstate handles the rest.
           </p>
         </motion.div>
 
@@ -795,11 +809,11 @@ export function SetupWizard() {
             <motion.button
               whileHover={{ x: -2 }}
               whileTap={{ scale: 0.95 }}
-              onClick={goBack}
-              disabled={step === 0}
+              onClick={step === 0 && hasExistingConfig ? () => router.push("/") : goBack}
+              disabled={step === 0 && !hasExistingConfig}
               className="text-xs text-text-muted transition-colors hover:text-text-primary disabled:invisible"
             >
-              ← Back
+              {step === 0 && hasExistingConfig ? "← Dashboard" : "← Back"}
             </motion.button>
 
             {step < 5 && (

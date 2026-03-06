@@ -6,6 +6,8 @@ import type { PipelineConfig, Severity } from "@/lib/types";
 import { SEVERITIES } from "@/lib/types";
 import { ModelSelector } from "@/components/ModelSelector";
 import { CustomizationPanel } from "@/components/CustomizationPanel";
+import { useTheme, ALL_THEMES, THEME_META } from "@/components/ThemeProvider";
+import type { Theme } from "@/components/ThemeProvider";
 
 const SEVERITY_OPTIONS: Severity[] = [
   SEVERITIES.CRITICAL,
@@ -132,6 +134,7 @@ export function SettingsPanel({ config, onClose, onSave }: SettingsPanelProps) {
               transition={SPRING}
               onClick={onClose}
               className="rounded-lg p-1.5 text-text-muted transition-colors hover:bg-elevated hover:text-text-primary"
+              aria-label="Close settings"
             >
               <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -270,6 +273,22 @@ export function SettingsPanel({ config, onClose, onSave }: SettingsPanelProps) {
                   color="bg-agent-ux"
                   glowColor="rgba(255,184,0,0.3)"
                 />
+                <ToggleRow
+                  label="Researcher"
+                  description="One-time project discovery at pipeline start"
+                  checked={draft.enableResearcher}
+                  onChange={(v) => update("enableResearcher", v)}
+                  color="bg-agent-researcher"
+                  glowColor="rgba(255,107,107,0.3)"
+                />
+                <ToggleRow
+                  label="Code Simplifier"
+                  description="Review and simplify code changes each cycle"
+                  checked={draft.enableCodeSimplifier}
+                  onChange={(v) => update("enableCodeSimplifier", v)}
+                  color="bg-agent-simplifier"
+                  glowColor="rgba(255,105,180,0.3)"
+                />
               </div>
             </div>
 
@@ -288,6 +307,9 @@ export function SettingsPanel({ config, onClose, onSave }: SettingsPanelProps) {
                 onChange={(v) => update("infiniteSessions", v)}
               />
             </div>
+
+            {/* Theme selector */}
+            <ThemePicker />
           </div>
 
           {/* Footer */}
@@ -377,5 +399,63 @@ function ToggleRow({
         />
       </motion.div>
     </motion.button>
+  );
+}
+
+// ─── Theme picker ────────────────────────────────────────────────────────────
+
+function ThemePicker() {
+  const { theme, setTheme } = useTheme();
+
+  return (
+    <div className="glass-panel rounded-xl p-4">
+      <label className="mb-3 block text-[10px] uppercase tracking-widest text-text-muted">
+        Theme
+      </label>
+      <div className="grid grid-cols-2 gap-2">
+        {ALL_THEMES.map((t) => {
+          const meta = THEME_META[t];
+          const active = theme === t;
+          return (
+            <motion.button
+              key={t}
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.97 }}
+              transition={SPRING}
+              onClick={() => setTheme(t as Theme)}
+              className={`relative flex flex-col items-start gap-1 rounded-xl border px-3 py-2.5 text-left transition-colors ${
+                active
+                  ? "border-accent/30 bg-accent/5"
+                  : "border-border-subtle bg-void/30 hover:bg-elevated"
+              }`}
+              style={
+                active
+                  ? { boxShadow: `0 0 12px ${meta.color}20` }
+                  : undefined
+              }
+            >
+              <div className="flex items-center gap-2">
+                <div
+                  className="h-2.5 w-2.5 rounded-full"
+                  style={{
+                    backgroundColor: meta.color,
+                    boxShadow: active ? `0 0 8px ${meta.color}60` : "none",
+                  }}
+                />
+                <span
+                  className="text-xs font-medium"
+                  style={{ color: active ? meta.color : "var(--color-text-primary)" }}
+                >
+                  {meta.label}
+                </span>
+              </div>
+              <span className="text-[9px] text-text-muted">
+                {meta.description}
+              </span>
+            </motion.button>
+          );
+        })}
+      </div>
+    </div>
   );
 }

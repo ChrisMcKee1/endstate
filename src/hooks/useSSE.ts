@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import type { SSEEvent, SessionEventType } from "@/lib/types";
 
-const MAX_EVENTS = 500;
 const MAX_RETRIES = 10;
 const MAX_BACKOFF_MS = 30_000;
+const FLUSH_INTERVAL_MS = 16; // ~60fps
 
 type ConnectionStatus = "connecting" | "connected" | "disconnected" | "error";
 
@@ -13,21 +13,67 @@ interface UseSSEReturn {
   events: SSEEvent[];
   connectionStatus: ConnectionStatus;
   latestByType: Map<SessionEventType, SSEEvent>;
+  /** Call to acknowledge processed events so the buffer can be freed */
+  acknowledge: (count: number) => void;
 }
 
 export function useSSE(url: string): UseSSEReturn {
-  const [events, setEvents] = useState<SSEEvent[]>([]);
   const [connectionStatus, setConnectionStatus] =
     useState<ConnectionStatus>("connecting");
-  const [latestByType, setLatestByType] = useState<
-    Map<SessionEventType, SSEEvent>
-  >(() => new Map());
+
+  // Use refs for event buffering to avoid render-loop issues.
+  // `pendingRef` accumulates incoming SSE events between flushes.
+  // `deliveredRef` holds the events currently exposed to the consumer.
+  // `acknowledgedRef` tracks how many the consumer has processed.
+  const pendingRef = useRef<SSEEvent[]>([]);
+  const deliveredRef = useRef<SSEEvent[]>([]);
+  const acknowledgedRef = useRef(0);
+  const flushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const latestRef = useRef<Map<SessionEventType, SSEEvent>>(new Map());
+
+  // State that triggers re-renders — only updated on flush, not per-event
+  const [events, setEvents] = useState<SSEEvent[]>([]);
+  const [latestByType, setLatestByType] = useState<Map<SessionEventType, SSEEvent>>(() => new Map());
+
+  const flush = useCallback(() => {
+    flushTimer.current = null;
+
+    // Remove events the consumer already acknowledged
+    if (acknowledgedRef.current > 0) {
+      deliveredRef.current = deliveredRef.current.slice(acknowledgedRef.current);
+      acknowledgedRef.current = 0;
+    }
+
+    // Append new pending events
+    if (pendingRef.current.length > 0) {
+      deliveredRef.current = [...deliveredRef.current, ...pendingRef.current];
+      pendingRef.current = [];
+    }
+
+    // Cap the buffer to prevent unbounded growth if consumer falls behind
+    if (deliveredRef.current.length > 5000) {
+      deliveredRef.current = deliveredRef.current.slice(-3000);
+    }
+
+    setEvents(deliveredRef.current);
+    setLatestByType(new Map(latestRef.current));
+  }, []);
+
+  const scheduleFlush = useCallback(() => {
+    if (!flushTimer.current) {
+      flushTimer.current = setTimeout(flush, FLUSH_INTERVAL_MS);
+    }
+  }, [flush]);
+
+  const acknowledge = useCallback((count: number) => {
+    acknowledgedRef.current += count;
+    scheduleFlush();
+  }, [scheduleFlush]);
 
   useEffect(() => {
     let retryCount = 0;
     let es: EventSource | null = null;
     let timer: ReturnType<typeof setTimeout> | null = null;
-    const latest = new Map<SessionEventType, SSEEvent>();
 
     const connect = () => {
       es?.close();
@@ -41,12 +87,9 @@ export function useSSE(url: string): UseSSEReturn {
       es.onmessage = (e: MessageEvent<string>) => {
         try {
           const event = JSON.parse(e.data) as SSEEvent;
-          latest.set(event.type, event);
-          setLatestByType(new Map(latest));
-          setEvents((prev) => {
-            const next = [...prev, event];
-            return next.length > MAX_EVENTS ? next.slice(-MAX_EVENTS) : next;
-          });
+          latestRef.current.set(event.type, event);
+          pendingRef.current.push(event);
+          scheduleFlush();
         } catch {
           /* skip malformed frames */
         }
@@ -74,8 +117,9 @@ export function useSSE(url: string): UseSSEReturn {
     return () => {
       es?.close();
       if (timer) clearTimeout(timer);
+      if (flushTimer.current) clearTimeout(flushTimer.current);
     };
-  }, [url]);
+  }, [url, scheduleFlush]);
 
-  return { events, connectionStatus, latestByType };
+  return { events, connectionStatus, latestByType, acknowledge };
 }

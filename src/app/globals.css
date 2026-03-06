@@ -75,29 +75,45 @@
   75% { transform: translateY(2px); }
 }
 
-/* ─── Theme Tokens ──────────────────────────────────────────────────────── */
+/* ─── Theme Tokens (Endstate Design System) ────────────────────────────── */
 
 @theme inline {
-  /* Background layers — Emotional Dark Mode */
+  /* Backgrounds / Surfaces — Midnight Obsidian palette */
   --color-void: #0A0B10;
   --color-surface: #14151F;
   --color-elevated: #14151F;
+  --color-deep-surface: #101726;
   --color-overlay: #1C1E2E;
 
-  /* Borders — translucent, shadow-led depth */
-  --color-border-subtle: rgba(255, 255, 255, 0.04);
-  --color-border-active: rgba(255, 255, 255, 0.08);
+  /* Borders — glass/translucent depth */
+  --color-border-subtle: rgba(255, 255, 255, 0.06);
+  --color-border-active: rgba(255, 255, 255, 0.14);
+  --color-border-faint: rgba(255, 255, 255, 0.025);
+  --color-border-whisper: rgba(255, 255, 255, 0.02);
+  --color-border-cyan-glass: rgba(0, 229, 255, 0.14);
+  --color-border-emerald-glass: rgba(0, 255, 163, 0.12);
 
-  /* Text — never pure white */
+  /* Text — Crisp Slate / Muted Steel / Deep Slate */
   --color-text-primary: #F8FAFC;
   --color-text-secondary: #94A3B8;
   --color-text-muted: #475569;
 
-  /* Agent colors — aligned to new palette */
+  /* Accent — The Flow (Vision → Orchestration → Outcome) */
+  --color-accent: #00E5FF;
+  --color-accent-dim: #0891B2;
+  --color-accent-violet: #B026FF;
+  --color-accent-emerald: #00FFA3;
+
+  /* Glass fills */
+  --color-glass-cyan: rgba(0, 229, 255, 0.04);
+
+  /* Agent colors */
+  --color-agent-researcher: #FF6B6B;
   --color-agent-explorer: #00E5FF;
   --color-agent-analyst: #B026FF;
   --color-agent-fixer: #00FFA3;
   --color-agent-ux: #FFB800;
+  --color-agent-simplifier: #FF69B4;
 
   /* Severity */
   --color-severity-critical: #EF4444;
@@ -110,10 +126,6 @@
   --color-status-paused: #FFB800;
   --color-status-error: #EF4444;
   --color-status-idle: #475569;
-
-  /* Accent — Cyber Cyan */
-  --color-accent: #00E5FF;
-  --color-accent-dim: #0891B2;
 
   /* Fonts — Geist system */
   --font-display: var(--font-geist-sans);
@@ -225,16 +237,16 @@ body {
 /* ─── Effects ───────────────────────────────────────────────────────────── */
 
 .glass {
-  background: rgba(20, 21, 31, 0.8);
+  background: rgba(20, 21, 31, 0.9);
   backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .glass-panel {
-  background: rgba(20, 21, 31, 0.6);
+  background: rgba(20, 21, 31, 0.85);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   box-shadow: var(--shadow-glass);
 }
 
@@ -270,9 +282,162 @@ body {
   content: '';
   position: absolute;
   inset: 0;
-  opacity: 0.02;
+  opacity: 0.015;
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence baseFrequency='0.7' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
   pointer-events: none;
-  z-index: 0;
+  z-index: -1;
   border-radius: inherit;
+}
+
+/* ─── Endstate Background Environments ─────────────────────────────────── */
+
+.bg-midnight-topography {
+  background-color: #0A0B10;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+.bg-deep-surface-radial {
+  background: radial-gradient(circle at 50% 50%, #101726 0%, #14151F 60%, #0A0B10 100%);
+}
+
+.bg-autonomous-mesh {
+  background-color: #14151F;
+  background-image:
+    radial-gradient(circle at 15% 15%, rgba(0, 229, 255, 0.04) 0%, transparent 40%),
+    radial-gradient(circle at 85% 85%, rgba(176, 38, 255, 0.04) 0%, transparent 40%);
+}
+
+/* ─── Logo Animation ──────────────────────────────────────────────────── */
+
+.agent-loop-animated {
+  animation: refineLoop 3s linear infinite;
+}
+
+@keyframes refineLoop {
+  to {
+    stroke-dashoffset: -100;
+  }
+}
+
+/* ─── Theme Overrides ───────────────────────────────────────────────────── */
+
+/* Pip-Boy — Monochrome green terminal aesthetic */
+[data-theme="pip-boy"] {
+  --color-void: #0a1a0a;
+  --color-surface: #0c1f0c;
+  --color-elevated: #0e260e;
+  --color-overlay: #0e260e;
+  --color-border-subtle: rgba(32, 194, 14, 0.12);
+  --color-border-active: rgba(32, 194, 14, 0.2);
+  --color-text-primary: #20c20e;
+  --color-text-secondary: #18a018;
+  --color-text-muted: #0e8a0e;
+  --color-accent: #20c20e;
+  --color-accent-dim: #0e8a0e;
+  --color-agent-explorer: #20c20e;
+  --color-agent-analyst: #20c20e;
+  --color-agent-fixer: #20c20e;
+  --color-agent-ux: #20c20e;
+  --color-status-live: #20c20e;
+  --color-status-paused: #18a018;
+  --color-status-idle: #0e8a0e;
+  --scanline-opacity: 0.15;
+  --vignette-opacity: 0.6;
+  --phosphor-glow: 0 0 8px rgba(32, 194, 14, 0.3);
+}
+
+/* CRT Phosphor — Green CRT with heavier scanlines */
+[data-theme="crt"] {
+  --color-void: #001200;
+  --color-surface: #001800;
+  --color-elevated: #002000;
+  --color-overlay: #002000;
+  --color-border-subtle: rgba(51, 255, 51, 0.1);
+  --color-border-active: rgba(51, 255, 51, 0.18);
+  --color-text-primary: #33ff33;
+  --color-text-secondary: #22cc22;
+  --color-text-muted: #1a8a1a;
+  --color-accent: #33ff33;
+  --color-accent-dim: #1a8a1a;
+  --color-agent-explorer: #33ff33;
+  --color-agent-analyst: #ffcc00;
+  --color-agent-fixer: #33ff33;
+  --color-agent-ux: #ff6666;
+  --color-status-live: #33ff33;
+  --color-status-paused: #ffcc00;
+  --color-status-idle: #1a8a1a;
+  --scanline-opacity: 0.25;
+  --vignette-opacity: 0.7;
+  --phosphor-glow: 0 0 12px rgba(51, 255, 51, 0.4);
+}
+
+/* Mainframe — Corporate dark with cyan accent */
+[data-theme="mainframe"] {
+  --color-void: #0d1117;
+  --color-surface: #101820;
+  --color-elevated: #161b22;
+  --color-overlay: #161b22;
+  --color-border-subtle: rgba(0, 229, 255, 0.08);
+  --color-border-active: rgba(0, 229, 255, 0.14);
+  --color-text-primary: #e6edf3;
+  --color-text-secondary: #b0bec5;
+  --color-text-muted: #546e7a;
+  --color-accent: #00e5ff;
+  --color-accent-dim: #0891B2;
+  --color-agent-explorer: #00e5ff;
+  --color-agent-analyst: #ffab00;
+  --color-agent-fixer: #d500f9;
+  --color-agent-ux: #ff1744;
+  --color-status-live: #00e5ff;
+  --color-status-paused: #ffab00;
+  --color-status-idle: #546e7a;
+  --scanline-opacity: 0;
+  --vignette-opacity: 0;
+  --phosphor-glow: none;
+}
+
+/* Holographic — default theme, no overrides needed */
+
+/* ─── Scanline & CRT Overlays ──────────────────────────────────────────── */
+
+.scanlines {
+  position: relative;
+}
+
+.scanlines::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0, 0, 0, var(--scanline-opacity, 0)) 2px,
+    rgba(0, 0, 0, var(--scanline-opacity, 0)) 4px
+  );
+}
+
+.vignette {
+  position: relative;
+}
+
+.vignette::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2;
+  border-radius: inherit;
+  background: radial-gradient(
+    ellipse at center,
+    transparent 50%,
+    rgba(0, 0, 0, var(--vignette-opacity, 0)) 100%
+  );
+}
+
+.phosphor-text {
+  text-shadow: var(--phosphor-glow, none);
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { Task, Severity, TaskStatus } from "@/lib/types";
 import { SEVERITIES, TASK_STATUSES } from "@/lib/types";
@@ -24,6 +24,7 @@ const STATUS_COLORS: Record<TaskStatus, string> = {
 
 type SortKey = "severity" | "status" | "cycle";
 type FilterSeverity = Severity | "ALL";
+type FilterStatus = "ALL" | "ACTIVE" | "DONE";
 
 const SEVERITY_ORDER: Record<Severity, number> = {
   [SEVERITIES.CRITICAL]: 0,
@@ -39,6 +40,8 @@ const STATUS_ORDER: Record<TaskStatus, number> = {
   [TASK_STATUSES.RESOLVED]: 3,
   [TASK_STATUSES.WONT_FIX]: 4,
 };
+
+const DONE_STATUSES = new Set<TaskStatus>([TASK_STATUSES.RESOLVED, TASK_STATUSES.WONT_FIX]);
 
 const SPRING = { type: "spring" as const, stiffness: 400, damping: 30 };
 const STAGGER = { staggerChildren: 0.04 };
@@ -97,16 +100,31 @@ function StatusIcon({ status }: { status: TaskStatus }) {
 interface TaskListProps {
   tasks: Task[];
   onSelectTask: (task: Task) => void;
+  onRefreshTasks?: () => void;
 }
 
-export function TaskList({ tasks, onSelectTask }: TaskListProps) {
+export function TaskList({ tasks, onSelectTask, onRefreshTasks }: TaskListProps) {
   const [sortBy, setSortBy] = useState<SortKey>("severity");
   const [filterSeverity, setFilterSeverity] = useState<FilterSeverity>("ALL");
+  const [filterStatus, setFilterStatus] = useState<FilterStatus>("ALL");
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [addTitle, setAddTitle] = useState("");
+  const [addSeverity, setAddSeverity] = useState<Severity>(SEVERITIES.MEDIUM);
+  const [addComponent, setAddComponent] = useState("");
+  const [addDetail, setAddDetail] = useState("");
+  const [addLoading, setAddLoading] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   const sortedTasks = useMemo(() => {
     let filtered = tasks;
     if (filterSeverity !== "ALL") {
-      filtered = tasks.filter((t) => t.severity === filterSeverity);
+      filtered = filtered.filter((t) => t.severity === filterSeverity);
+    }
+    if (filterStatus === "ACTIVE") {
+      filtered = filtered.filter((t) => !DONE_STATUSES.has(t.status));
+    } else if (filterStatus === "DONE") {
+      filtered = filtered.filter((t) => DONE_STATUSES.has(t.status));
     }
 
     return [...filtered].sort((a, b) => {
@@ -121,7 +139,7 @@ export function TaskList({ tasks, onSelectTask }: TaskListProps) {
           return 0;
       }
     });
-  }, [tasks, sortBy, filterSeverity]);
+  }, [tasks, sortBy, filterSeverity, filterStatus]);
 
   const counts = useMemo(() => {
     const open = tasks.filter(
@@ -135,6 +153,54 @@ export function TaskList({ tasks, onSelectTask }: TaskListProps) {
     ).length;
     return { open, resolved, critical, total: tasks.length };
   }, [tasks]);
+
+  const toggleSelect = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const handleDeleteSelected = useCallback(async () => {
+    if (selectedIds.size === 0) return;
+    setDeleteLoading(true);
+    try {
+      const res = await fetch("/api/tasks", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: [...selectedIds] }),
+      });
+      if (res.ok) {
+        setSelectedIds(new Set());
+        onRefreshTasks?.();
+      }
+    } catch { /* silent */ }
+    finally { setDeleteLoading(false); }
+  }, [selectedIds, onRefreshTasks]);
+
+  const handleAddTask = useCallback(async () => {
+    if (!addTitle.trim() || !addComponent.trim() || !addDetail.trim()) return;
+    setAddLoading(true);
+    try {
+      const res = await fetch("/api/tasks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: addTitle.trim(),
+          severity: addSeverity,
+          component: addComponent.trim(),
+          detail: addDetail.trim(),
+        }),
+      });
+      if (res.ok) {
+        setAddTitle(""); setAddComponent(""); setAddDetail("");
+        setShowAddForm(false);
+        onRefreshTasks?.();
+      }
+    } catch { /* silent */ }
+    finally { setAddLoading(false); }
+  }, [addTitle, addSeverity, addComponent, addDetail, onRefreshTasks]);
 
   return (
     <div className="flex h-full flex-col">
@@ -157,10 +223,44 @@ export function TaskList({ tasks, onSelectTask }: TaskListProps) {
             </span>
           )}
         </div>
+        <div className="ml-auto flex items-center gap-1">
+          {/* Add button */}
+          <motion.button
+            whileHover={{ scale: 1.1 }}
+            whileTap={{ scale: 0.9 }}
+            onClick={() => setShowAddForm(!showAddForm)}
+            className="rounded-md p-1 text-accent transition-colors hover:bg-accent/10"
+            title="Add task"
+          >
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+            </svg>
+          </motion.button>
+          {/* Delete selected */}
+          <AnimatePresence>
+            {selectedIds.size > 0 && (
+              <motion.button
+                initial={{ scale: 0, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0, opacity: 0 }}
+                whileHover={{ scale: 1.1 }}
+                whileTap={{ scale: 0.9 }}
+                onClick={handleDeleteSelected}
+                disabled={deleteLoading}
+                className="rounded-md p-1 text-severity-critical transition-colors hover:bg-severity-critical/10 disabled:opacity-40"
+                title={`Delete ${selectedIds.size} selected`}
+              >
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
+                </svg>
+              </motion.button>
+            )}
+          </AnimatePresence>
+        </div>
       </div>
 
       {/* Filters */}
-      <div className="glass-panel flex items-center gap-2 rounded-none border-x-0 border-t-0 border-b border-border-subtle px-3 py-1.5">
+      <div className="flex items-center gap-2 border-b border-border-subtle px-3 py-1.5" style={{ background: "rgba(20, 21, 31, 0.4)" }}>
         <select
           value={sortBy}
           onChange={(e) => setSortBy(e.target.value as SortKey)}
@@ -182,7 +282,81 @@ export function TaskList({ tasks, onSelectTask }: TaskListProps) {
           <option value="MEDIUM">Medium</option>
           <option value="LOW">Low</option>
         </select>
+
+        <select
+          value={filterStatus}
+          onChange={(e) => setFilterStatus(e.target.value as FilterStatus)}
+          className="rounded-lg border border-border-subtle bg-void/50 px-2 py-1 text-[10px] text-text-secondary focus:border-accent/50 focus:outline-none"
+        >
+          <option value="ALL">All Status</option>
+          <option value="ACTIVE">Active</option>
+          <option value="DONE">Done</option>
+        </select>
       </div>
+
+      {/* Add task form */}
+      <AnimatePresence>
+        {showAddForm && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={SPRING}
+            className="overflow-hidden border-b border-border-subtle"
+          >
+            <div className="space-y-2 p-3" style={{ background: "rgba(20, 21, 31, 0.5)" }}>
+              <input
+                value={addTitle}
+                onChange={(e) => setAddTitle(e.target.value)}
+                placeholder="Task title…"
+                className="w-full rounded-lg border border-border-active bg-void/60 px-3 py-1.5 text-xs text-text-primary placeholder:text-text-muted/40 focus:border-accent/40 focus:outline-none"
+              />
+              <div className="flex gap-2">
+                <select
+                  value={addSeverity}
+                  onChange={(e) => setAddSeverity(e.target.value as Severity)}
+                  className="rounded-lg border border-border-subtle bg-void/50 px-2 py-1 text-[10px] text-text-secondary focus:border-accent/50 focus:outline-none"
+                >
+                  <option value="CRITICAL">Critical</option>
+                  <option value="HIGH">High</option>
+                  <option value="MEDIUM">Medium</option>
+                  <option value="LOW">Low</option>
+                </select>
+                <input
+                  value={addComponent}
+                  onChange={(e) => setAddComponent(e.target.value)}
+                  placeholder="Component…"
+                  className="flex-1 rounded-lg border border-border-active bg-void/60 px-3 py-1 text-[10px] text-text-primary placeholder:text-text-muted/40 focus:border-accent/40 focus:outline-none"
+                />
+              </div>
+              <textarea
+                value={addDetail}
+                onChange={(e) => setAddDetail(e.target.value)}
+                placeholder="Description…"
+                rows={2}
+                className="w-full rounded-lg border border-border-active bg-void/60 px-3 py-1.5 text-xs text-text-primary placeholder:text-text-muted/40 focus:border-accent/40 focus:outline-none resize-none"
+              />
+              <div className="flex justify-end gap-2">
+                <button
+                  onClick={() => setShowAddForm(false)}
+                  className="rounded-lg px-3 py-1 text-[10px] text-text-muted hover:text-text-secondary"
+                >
+                  Cancel
+                </button>
+                <motion.button
+                  whileHover={{ scale: 1.04 }}
+                  whileTap={{ scale: 0.96 }}
+                  onClick={handleAddTask}
+                  disabled={addLoading || !addTitle.trim()}
+                  className="rounded-lg bg-accent/15 px-3 py-1 text-[10px] font-medium text-accent hover:bg-accent/25 disabled:opacity-30"
+                >
+                  {addLoading ? "Adding…" : "Add Task"}
+                </motion.button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Task list */}
       <div className="flex-1 overflow-y-auto">
@@ -207,28 +381,47 @@ export function TaskList({ tasks, onSelectTask }: TaskListProps) {
             <motion.div variants={{ show: STAGGER }} initial="hidden" animate="show">
               {sortedTasks.map((task) => {
                 const sev = SEVERITY_STYLES[task.severity];
+                const isSelected = selectedIds.has(task.id);
                 return (
-                  <motion.button
+                  <motion.div
                     key={task.id}
                     variants={{
                       hidden: { opacity: 0, x: -12 },
                       show: { opacity: 1, x: 0 },
                     }}
                     transition={SPRING}
-                    whileHover={{
-                      backgroundColor: "rgba(255,255,255,0.02)",
-                      boxShadow: `inset 3px 0 0 ${sev.glow}`,
-                    }}
-                    onClick={() => onSelectTask(task)}
-                    className="group flex w-full items-start gap-2.5 border-b border-border-subtle/50 px-3 py-2.5 text-left"
+                    className={`group flex w-full items-start gap-2 border-b border-border-subtle/50 px-3 py-2.5 ${
+                      isSelected ? "bg-accent/5" : ""
+                    }`}
                   >
+                    {/* Checkbox */}
+                    <button
+                      onClick={() => toggleSelect(task.id)}
+                      className="mt-1 shrink-0"
+                    >
+                      <span className={`flex h-4 w-4 items-center justify-center rounded border transition-colors ${
+                        isSelected
+                          ? "border-accent bg-accent/20 text-accent"
+                          : "border-border-active text-transparent hover:border-text-muted"
+                      }`}>
+                        {isSelected && (
+                          <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                          </svg>
+                        )}
+                      </span>
+                    </button>
+
                     {/* Status icon */}
                     <span className="mt-0.5 shrink-0">
                       <StatusIcon status={task.status} />
                     </span>
 
-                    {/* Content */}
-                    <div className="min-w-0 flex-1">
+                    {/* Content — clickable to view detail */}
+                    <button
+                      onClick={() => onSelectTask(task)}
+                      className="min-w-0 flex-1 text-left"
+                    >
                       <div className="flex items-center gap-2">
                         <span
                           className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-bold ${sev.bg} ${sev.color}`}
@@ -252,23 +445,28 @@ export function TaskList({ tasks, onSelectTask }: TaskListProps) {
                           </span>
                         )}
                       </div>
-                    </div>
+                    </button>
 
-                    {/* Arrow */}
-                    <svg
-                      className="mt-1 h-3 w-3 shrink-0 text-text-muted/30 transition-colors group-hover:text-accent"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      strokeWidth={2}
+                    {/* Quick delete */}
+                    <motion.button
+                      whileHover={{ scale: 1.2 }}
+                      whileTap={{ scale: 0.8 }}
+                      onClick={async () => {
+                        await fetch("/api/tasks", {
+                          method: "DELETE",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ ids: [task.id] }),
+                        });
+                        onRefreshTasks?.();
+                      }}
+                      className="mt-0.5 shrink-0 rounded p-1 text-text-muted/30 opacity-0 transition-all group-hover:opacity-100 hover:bg-severity-critical/10 hover:text-severity-critical"
+                      title="Delete task"
                     >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="M8.25 4.5l7.5 7.5-7.5 7.5"
-                      />
-                    </svg>
-                  </motion.button>
+                      <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </motion.button>
+                  </motion.div>
                 );
               })}
             </motion.div>

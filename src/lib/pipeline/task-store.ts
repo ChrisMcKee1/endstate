@@ -9,64 +9,89 @@ import type {
   TaskEvent,
 } from "@/lib/types";
 import { TASK_STATUSES, TASK_ACTIONS } from "@/lib/types";
+import { projectTasksDir, getActiveProjectPath } from "./project-resolver";
 
-const DATA_DIR = path.join(process.cwd(), "data", "tasks");
-const tasks = new Map<string, Task>();
-let counter = 0;
-let loaded = false;
+// ─── Per-project state ───────────────────────────────────────────────────────
 
-// ─── Disk I/O ─────────────────────────────────────────────────────────────────
+interface ProjectTaskState {
+  tasks: Map<string, Task>;
+  counter: number;
+  loaded: boolean;
+  tasksDir: string;
+}
 
-function ensureDir(): void {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
+const projectStates = new Map<string, ProjectTaskState>();
+
+function resolveTasksDir(projectPath?: string): string {
+  const resolved = projectPath ?? getActiveProjectPath();
+  if (!resolved) throw new Error("No active project – set one via settings first");
+  return projectTasksDir(resolved);
+}
+
+function getState(projectPath?: string): ProjectTaskState {
+  const tasksDir = resolveTasksDir(projectPath);
+
+  let state = projectStates.get(tasksDir);
+  if (!state) {
+    state = { tasks: new Map(), counter: 0, loaded: false, tasksDir };
+    projectStates.set(tasksDir, state);
+  }
+  return state;
+}
+
+// ─── Disk I/O ────────────────────────────────────────────────────────────────
+
+function ensureDir(state: ProjectTaskState): void {
+  if (!fs.existsSync(state.tasksDir)) {
+    fs.mkdirSync(state.tasksDir, { recursive: true });
   }
 }
 
-function taskPath(id: string): string {
-  return path.join(DATA_DIR, `${id}.json`);
+function taskPath(state: ProjectTaskState, id: string): string {
+  return path.join(state.tasksDir, `${id}.json`);
 }
 
-function writeToDisk(task: Task): void {
-  ensureDir();
-  fs.writeFileSync(taskPath(task.id), JSON.stringify(task, null, 2), "utf-8");
+function writeToDisk(state: ProjectTaskState, task: Task): void {
+  ensureDir(state);
+  fs.writeFileSync(taskPath(state, task.id), JSON.stringify(task, null, 2), "utf-8");
 }
 
-function loadFromDisk(): void {
-  if (loaded) return;
-  loaded = true;
+function loadFromDisk(state: ProjectTaskState): void {
+  if (state.loaded) return;
+  state.loaded = true;
 
-  ensureDir();
-  const files = fs.readdirSync(DATA_DIR).filter((f) => f.endsWith(".json"));
+  ensureDir(state);
+  const files = fs.readdirSync(state.tasksDir).filter((f) => f.endsWith(".json"));
 
   for (const file of files) {
     try {
-      const raw = fs.readFileSync(path.join(DATA_DIR, file), "utf-8");
+      const raw = fs.readFileSync(path.join(state.tasksDir, file), "utf-8");
       const task = JSON.parse(raw) as Task;
-      tasks.set(task.id, task);
+      state.tasks.set(task.id, task);
       // Keep counter in sync
       const num = parseInt(task.id.replace("TSK-", ""), 10);
-      if (num >= counter) counter = num;
+      if (num >= state.counter) state.counter = num;
     } catch {
       // Skip corrupt files
     }
   }
 }
 
-// ─── ID generation ────────────────────────────────────────────────────────────
+// ─── ID generation ───────────────────────────────────────────────────────────
 
-function nextId(): string {
-  counter++;
-  return `TSK-${String(counter).padStart(3, "0")}`;
+function nextId(state: ProjectTaskState): string {
+  state.counter++;
+  return `TSK-${String(state.counter).padStart(3, "0")}`;
 }
 
-// ─── Public API ───────────────────────────────────────────────────────────────
+// ─── Public API ──────────────────────────────────────────────────────────────
 
-export function createTask(input: TaskCreateInput): Task {
-  loadFromDisk();
+export function createTask(input: TaskCreateInput, projectPath?: string): Task {
+  const state = getState(projectPath);
+  loadFromDisk(state);
 
   const now = new Date().toISOString();
-  const id = nextId();
+  const id = nextId(state);
 
   const initialEvent: TaskEvent = {
     agent: input.agent,
@@ -92,15 +117,16 @@ export function createTask(input: TaskCreateInput): Task {
     updatedAt: now,
   };
 
-  tasks.set(id, task);
-  writeToDisk(task);
+  state.tasks.set(id, task);
+  writeToDisk(state, task);
   return task;
 }
 
-export function updateTask(input: TaskUpdateInput): Task {
-  loadFromDisk();
+export function updateTask(input: TaskUpdateInput, projectPath?: string): Task {
+  const state = getState(projectPath);
+  loadFromDisk(state);
 
-  const task = tasks.get(input.taskId);
+  const task = state.tasks.get(input.taskId);
   if (!task) throw new Error(`Task ${input.taskId} not found`);
 
   const now = new Date().toISOString();
@@ -139,31 +165,74 @@ export function updateTask(input: TaskUpdateInput): Task {
     task.tags = [...merged];
   }
 
-  writeToDisk(task);
+  writeToDisk(state, task);
   return task;
 }
 
-export function getTask(id: string): Task | undefined {
-  loadFromDisk();
-  return tasks.get(id);
+export function getTask(id: string, projectPath?: string): Task | undefined {
+  const state = getState(projectPath);
+  loadFromDisk(state);
+  return state.tasks.get(id);
 }
 
-export function getAllTasks(): Task[] {
-  loadFromDisk();
-  return [...tasks.values()];
+export function getAllTasks(projectPath?: string): Task[] {
+  const state = getState(projectPath);
+  loadFromDisk(state);
+  return [...state.tasks.values()];
 }
 
-export function getTasksByStatus(status: TaskStatus): Task[] {
-  loadFromDisk();
-  return [...tasks.values()].filter((t) => t.status === status);
+export function getTasksByStatus(status: TaskStatus, projectPath?: string): Task[] {
+  const state = getState(projectPath);
+  loadFromDisk(state);
+  return [...state.tasks.values()].filter((t) => t.status === status);
 }
 
-export function getTasksBySeverity(severity: Severity): Task[] {
-  loadFromDisk();
-  return [...tasks.values()].filter((t) => t.severity === severity);
+export function getTasksBySeverity(severity: Severity, projectPath?: string): Task[] {
+  const state = getState(projectPath);
+  loadFromDisk(state);
+  return [...state.tasks.values()].filter((t) => t.severity === severity);
 }
 
-export function getTaskCount(): number {
-  loadFromDisk();
-  return tasks.size;
+export function getTaskCount(projectPath?: string): number {
+  const state = getState(projectPath);
+  loadFromDisk(state);
+  return state.tasks.size;
+}
+
+export function deleteTask(id: string, projectPath?: string): boolean {
+  const state = getState(projectPath);
+  loadFromDisk(state);
+  const task = state.tasks.get(id);
+  if (!task) return false;
+  state.tasks.delete(id);
+  try {
+    const fp = taskPath(state, id);
+    if (fs.existsSync(fp)) fs.unlinkSync(fp);
+  } catch { /* ignore */ }
+  return true;
+}
+
+export function deleteTasks(ids: string[], projectPath?: string): number {
+  let count = 0;
+  for (const id of ids) {
+    if (deleteTask(id, projectPath)) count++;
+  }
+  return count;
+}
+
+export function patchTask(id: string, patch: { title?: string; severity?: Severity; status?: TaskStatus; component?: string }, projectPath?: string): Task | null {
+  const state = getState(projectPath);
+  loadFromDisk(state);
+  const task = state.tasks.get(id);
+  if (!task) return null;
+  if (patch.title !== undefined) task.title = patch.title;
+  if (patch.severity !== undefined) task.severity = patch.severity;
+  if (patch.status !== undefined) {
+    task.status = patch.status;
+    if (patch.status === TASK_STATUSES.RESOLVED) task.resolvedAt = new Date().toISOString();
+  }
+  if (patch.component !== undefined) task.component = patch.component;
+  task.updatedAt = new Date().toISOString();
+  writeToDisk(state, task);
+  return task;
 }

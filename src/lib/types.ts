@@ -20,10 +20,12 @@ export const TASK_STATUSES = {
 export type TaskStatus = (typeof TASK_STATUSES)[keyof typeof TASK_STATUSES];
 
 export const AGENT_ROLES = {
+  RESEARCHER: "researcher",
   EXPLORER: "explorer",
   ANALYST: "analyst",
   FIXER: "fixer",
   UX_REVIEWER: "ux-reviewer",
+  CODE_SIMPLIFIER: "code-simplifier",
 } as const;
 
 export type AgentRole = (typeof AGENT_ROLES)[keyof typeof AGENT_ROLES];
@@ -120,6 +122,10 @@ export interface PipelineConfig {
   enableAnalyst: boolean;
   enableFixer: boolean;
   enableUxReviewer: boolean;
+  enableResearcher: boolean;
+  enableCodeSimplifier: boolean;
+  /** Agent execution graph — defines run order, parallelization, and loop-back */
+  agentGraph: AgentGraphNode[];
   reasoningEffort?: ReasoningEffort;
   skills: SkillDefinition[];
   customAgentDefinitions: CustomAgentDefinition[];
@@ -153,6 +159,81 @@ export interface SSEEvent {
   agent?: AgentRole;
   data: Record<string, unknown>;
 }
+
+// ─── Agent Pipeline Graph ─────────────────────────────────────────────────────
+
+export const GRAPH_NODE_TYPES = {
+  /** Runs once at pipeline start, never loops */
+  ENTRY: "entry",
+  /** Standard node in the cycle loop */
+  CYCLE: "cycle",
+  /** Convergence gate — decides CONTINUE/STOP */
+  GATE: "gate",
+  /** Always-last node before loop-back */
+  EXIT: "exit",
+} as const;
+
+export type GraphNodeType =
+  (typeof GRAPH_NODE_TYPES)[keyof typeof GRAPH_NODE_TYPES];
+
+export interface AgentGraphNode {
+  /** Agent role identifier */
+  role: AgentRole;
+  /** Node type determines execution behavior */
+  nodeType: GraphNodeType;
+  /** Run after these agent roles complete (empty = can start immediately) */
+  runAfter: AgentRole[];
+  /** Whether this node can run in parallel with siblings that share the same runAfter */
+  parallel: boolean;
+  /** Whether this agent is enabled */
+  enabled: boolean;
+}
+
+/** Default pipeline graph — Researcher → [Explorer, Fixer, UX Reviewer] → Analyst → Code Simplifier → loop */
+export const DEFAULT_AGENT_GRAPH: AgentGraphNode[] = [
+  {
+    role: AGENT_ROLES.RESEARCHER,
+    nodeType: GRAPH_NODE_TYPES.ENTRY,
+    runAfter: [],
+    parallel: false,
+    enabled: true,
+  },
+  {
+    role: AGENT_ROLES.EXPLORER,
+    nodeType: GRAPH_NODE_TYPES.CYCLE,
+    runAfter: [AGENT_ROLES.RESEARCHER],
+    parallel: true,
+    enabled: true,
+  },
+  {
+    role: AGENT_ROLES.FIXER,
+    nodeType: GRAPH_NODE_TYPES.CYCLE,
+    runAfter: [AGENT_ROLES.RESEARCHER],
+    parallel: true,
+    enabled: true,
+  },
+  {
+    role: AGENT_ROLES.UX_REVIEWER,
+    nodeType: GRAPH_NODE_TYPES.CYCLE,
+    runAfter: [AGENT_ROLES.RESEARCHER],
+    parallel: true,
+    enabled: true,
+  },
+  {
+    role: AGENT_ROLES.ANALYST,
+    nodeType: GRAPH_NODE_TYPES.GATE,
+    runAfter: [AGENT_ROLES.EXPLORER, AGENT_ROLES.FIXER, AGENT_ROLES.UX_REVIEWER],
+    parallel: false,
+    enabled: true,
+  },
+  {
+    role: AGENT_ROLES.CODE_SIMPLIFIER,
+    nodeType: GRAPH_NODE_TYPES.EXIT,
+    runAfter: [AGENT_ROLES.ANALYST],
+    parallel: false,
+    enabled: true,
+  },
+];
 
 // ─── Customization Types ──────────────────────────────────────────────────────
 
@@ -256,4 +337,39 @@ export interface TaskUpdateInput {
   screenshot?: string;
   files?: string[];
   tags?: string[];
+}
+
+// ─── Awards ───────────────────────────────────────────────────────────────────
+
+export const AWARD_RARITIES = {
+  COMMON: "common",
+  UNCOMMON: "uncommon",
+  RARE: "rare",
+  EPIC: "epic",
+  LEGENDARY: "legendary",
+} as const;
+
+export type AwardRarity = (typeof AWARD_RARITIES)[keyof typeof AWARD_RARITIES];
+
+export const AWARD_SOURCES = {
+  PREDEFINED: "predefined",
+  AI_GENERATED: "ai-generated",
+} as const;
+
+export type AwardSource = (typeof AWARD_SOURCES)[keyof typeof AWARD_SOURCES];
+
+export interface Award {
+  id: string;
+  title: string;
+  description: string;
+  icon: string;
+  rarity: AwardRarity;
+  source: AwardSource;
+  earnedAt: string;
+  /** Color hex for glow effects */
+  color: string;
+  /** Optional agent associated with the award */
+  agent?: AgentRole;
+  /** Metric or stat that triggered the award */
+  trigger?: string;
 }

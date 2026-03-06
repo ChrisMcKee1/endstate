@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import type {
   PipelineConfig,
@@ -24,6 +25,9 @@ import { MetricsBar } from "@/components/MetricsBar";
 import { ContextMeter } from "@/components/ContextMeter";
 import { SettingsPanel } from "@/components/SettingsPanel";
 import { CelebrationEffects } from "@/components/CelebrationEffects";
+import { GitPanel } from "@/components/GitPanel";
+import { TokenUsageDisplay } from "@/components/TokenUsageDisplay";
+import { AwardsPanel } from "@/components/AwardsPanel";
 
 // ─── Stream entry type (UI-only) ──────────────────────────────────────────────
 
@@ -54,13 +58,14 @@ const INITIAL_STATE: PipelineState = {
   tasksSummary: { total: 0, open: 0, inProgress: 0, resolved: 0, deferred: 0 },
 };
 
-const SIDEBAR_TABS = ["tasks", "ux", "metrics"] as const;
+const SIDEBAR_TABS = ["tasks", "ux", "metrics", "awards"] as const;
 type SidebarTab = (typeof SIDEBAR_TABS)[number];
 
 const TAB_LABELS: Record<SidebarTab, string> = {
   tasks: "Tasks",
   ux: "UX",
   metrics: "Metrics",
+  awards: "Awards",
 };
 
 const STATUS_COLORS: Record<string, string> = {
@@ -78,6 +83,7 @@ interface DashboardProps {
 }
 
 export function Dashboard({ config }: DashboardProps) {
+  const router = useRouter();
   const [pipelineState, setPipelineState] =
     useState<PipelineState>(INITIAL_STATE);
   const [streamEntries, setStreamEntries] = useState<StreamEntry[]>([]);
@@ -88,22 +94,35 @@ export function Dashboard({ config }: DashboardProps) {
   const [contextUsage, setContextUsage] = useState(0);
   const [isCompacting, setIsCompacting] = useState(false);
   const [currentConfig, setCurrentConfig] = useState(config);
+  const [gitOpen, setGitOpen] = useState(false);
+  const [pipelineAction, setPipelineAction] = useState<"starting" | "stopping" | null>(null);
+  const [showNewProjectConfirm, setShowNewProjectConfirm] = useState(false);
 
   const entryCounter = useRef(0);
-  const lastProcessed = useRef(0);
+  // Track the current accumulating message/reasoning entry so deltas merge into one block
+  const activeMessageId = useRef<string | null>(null);
+  const activeReasoningId = useRef<string | null>(null);
 
-  const { events, connectionStatus } = useSSE("/api/pipeline/stream");
+  const { events, connectionStatus, acknowledge } = useSSE("/api/pipeline/stream");
 
   // ── Process SSE events ──────────────────────────────────────────────────────
+  // Track how many events we've already processed to avoid re-processing
+  // the same events across React re-renders while acknowledge is pending.
+  const processedCount = useRef(0);
 
   useEffect(() => {
-    if (events.length <= lastProcessed.current) return;
-    const newEvents = events.slice(lastProcessed.current);
-    lastProcessed.current = events.length;
+    if (events.length === 0) {
+      processedCount.current = 0;
+      return;
+    }
 
-    const newEntries: StreamEntry[] = [];
+    // Only process events we haven't seen yet
+    const unprocessed = events.slice(processedCount.current);
+    if (unprocessed.length === 0) return;
 
-    for (const evt of newEvents) {
+    const batch: StreamEntry[] = [];
+
+    for (const evt of unprocessed) {
       switch (evt.type) {
         case SESSION_EVENT_TYPES.PIPELINE_STATE_CHANGE: {
           const state = evt.data.state as PipelineState | undefined;
@@ -111,7 +130,9 @@ export function Dashboard({ config }: DashboardProps) {
           break;
         }
         case SESSION_EVENT_TYPES.AGENT_START: {
-          newEntries.push({
+          activeMessageId.current = null;
+          activeReasoningId.current = null;
+          batch.push({
             id: `se-${entryCounter.current++}`,
             agent: (evt.agent ?? evt.data.agent) as AgentRole | null,
             type: "system",
@@ -121,64 +142,106 @@ export function Dashboard({ config }: DashboardProps) {
           break;
         }
         case SESSION_EVENT_TYPES.ASSISTANT_MESSAGE_DELTA: {
-          newEntries.push({
-            id: `se-${entryCounter.current++}`,
+          const delta = String(evt.data.deltaContent ?? evt.data.delta ?? evt.data.content ?? "");
+          if (!delta) break;
+          // Try to append to the last message entry in this batch
+          if (activeMessageId.current) {
+            const existingIdx = batch.findIndex((e) => e.id === activeMessageId.current);
+            if (existingIdx !== -1) {
+              batch[existingIdx] = { ...batch[existingIdx], content: batch[existingIdx].content + delta };
+              break;
+            }
+          }
+          // Start new message block
+          const id = `se-${entryCounter.current++}`;
+          activeMessageId.current = id;
+          activeReasoningId.current = null;
+          batch.push({
+            id,
             agent: (evt.agent ?? null) as AgentRole | null,
             type: "message",
-            content: String(evt.data.delta ?? evt.data.content ?? ""),
+            content: delta,
             timestamp: evt.timestamp,
           });
           break;
         }
         case SESSION_EVENT_TYPES.ASSISTANT_MESSAGE: {
-          newEntries.push({
-            id: `se-${entryCounter.current++}`,
-            agent: (evt.agent ?? null) as AgentRole | null,
-            type: "message",
-            content: String(evt.data.content ?? ""),
-            timestamp: evt.timestamp,
-          });
+          activeMessageId.current = null;
+          const content = String(evt.data.content ?? "");
+          if (content) {
+            batch.push({
+              id: `se-${entryCounter.current++}`,
+              agent: (evt.agent ?? null) as AgentRole | null,
+              type: "message",
+              content,
+              timestamp: evt.timestamp,
+            });
+          }
           break;
         }
         case SESSION_EVENT_TYPES.TOOL_EXECUTION_START: {
-          newEntries.push({
+          activeMessageId.current = null;
+          activeReasoningId.current = null;
+          batch.push({
             id: `se-${entryCounter.current++}`,
             agent: (evt.agent ?? null) as AgentRole | null,
             type: "tool-start",
             content: `Calling ${String(evt.data.toolName ?? "tool")}`,
             timestamp: evt.timestamp,
             toolName: String(evt.data.toolName ?? ""),
-            toolArgs: evt.data.args
-              ? JSON.stringify(evt.data.args, null, 2)
+            toolArgs: evt.data.arguments
+              ? JSON.stringify(evt.data.arguments, null, 2)
               : undefined,
           });
           break;
         }
         case SESSION_EVENT_TYPES.TOOL_EXECUTION_COMPLETE: {
-          newEntries.push({
+          batch.push({
             id: `se-${entryCounter.current++}`,
             agent: (evt.agent ?? null) as AgentRole | null,
             type: "tool-complete",
-            content: `${String(evt.data.toolName ?? "tool")} completed`,
+            content: `${String(evt.data.toolName ?? evt.data.toolCallId ?? "tool")} completed`,
             timestamp: evt.timestamp,
-            toolName: String(evt.data.toolName ?? ""),
+            toolName: String(evt.data.toolName ?? evt.data.toolCallId ?? ""),
             toolResult: evt.data.result
               ? JSON.stringify(evt.data.result, null, 2)
               : undefined,
           });
           break;
         }
-        case SESSION_EVENT_TYPES.ASSISTANT_REASONING_DELTA:
-        case SESSION_EVENT_TYPES.ASSISTANT_REASONING: {
-          newEntries.push({
-            id: `se-${entryCounter.current++}`,
+        case SESSION_EVENT_TYPES.ASSISTANT_REASONING_DELTA: {
+          const rDelta = String(evt.data.deltaContent ?? evt.data.delta ?? evt.data.content ?? "");
+          if (!rDelta) break;
+          if (activeReasoningId.current) {
+            const existingIdx = batch.findIndex((e) => e.id === activeReasoningId.current);
+            if (existingIdx !== -1) {
+              batch[existingIdx] = { ...batch[existingIdx], content: batch[existingIdx].content + rDelta };
+              break;
+            }
+          }
+          const rId = `se-${entryCounter.current++}`;
+          activeReasoningId.current = rId;
+          batch.push({
+            id: rId,
             agent: (evt.agent ?? null) as AgentRole | null,
             type: "reasoning",
-            content: String(
-              evt.data.delta ?? evt.data.content ?? evt.data.reasoning ?? "",
-            ),
+            content: rDelta,
             timestamp: evt.timestamp,
           });
+          break;
+        }
+        case SESSION_EVENT_TYPES.ASSISTANT_REASONING: {
+          activeReasoningId.current = null;
+          const rContent = String(evt.data.content ?? evt.data.reasoning ?? "");
+          if (rContent) {
+            batch.push({
+              id: `se-${entryCounter.current++}`,
+              agent: (evt.agent ?? null) as AgentRole | null,
+              type: "reasoning",
+              content: rContent,
+              timestamp: evt.timestamp,
+            });
+          }
           break;
         }
         case SESSION_EVENT_TYPES.SESSION_COMPACTION_START:
@@ -186,12 +249,16 @@ export function Dashboard({ config }: DashboardProps) {
           break;
         case SESSION_EVENT_TYPES.SESSION_COMPACTION_COMPLETE: {
           setIsCompacting(false);
-          const usage = evt.data.contextUsage as number | undefined;
-          if (usage !== undefined) setContextUsage(usage);
+          // Compute context usage from SDK's pre/post compaction token counts
+          const preTokens = evt.data.preCompactionTokens as number | undefined;
+          const postTokens = evt.data.postCompactionTokens as number | undefined;
+          if (preTokens && postTokens && preTokens > 0) {
+            setContextUsage(postTokens / preTokens);
+          }
           break;
         }
         case SESSION_EVENT_TYPES.SESSION_ERROR: {
-          newEntries.push({
+          batch.push({
             id: `se-${entryCounter.current++}`,
             agent: (evt.agent ?? null) as AgentRole | null,
             type: "error",
@@ -203,13 +270,30 @@ export function Dashboard({ config }: DashboardProps) {
       }
     }
 
-    if (newEntries.length > 0) {
+    // Mark events as processed and acknowledge for cleanup
+    processedCount.current = events.length;
+    acknowledge(unprocessed.length);
+
+    // Merge batch into stream entries (single state update, no findIndex across prev)
+    if (batch.length > 0) {
       setStreamEntries((prev) => {
-        const combined = [...prev, ...newEntries];
-        return combined.length > 1000 ? combined.slice(-1000) : combined;
+        // If the first batch entry matches the last prev entry ID (delta continuation
+        // from a previous render cycle), merge their content
+        let merged = prev;
+        let batchStart = 0;
+        if (batch.length > 0 && prev.length > 0 && activeMessageId.current) {
+          const lastPrev = prev[prev.length - 1];
+          if (lastPrev.id === activeMessageId.current && batch[0].id === activeMessageId.current) {
+            // Merge first batch item into last prev item
+            merged = [...prev.slice(0, -1), { ...lastPrev, content: lastPrev.content + batch[0].content }];
+            batchStart = 1;
+          }
+        }
+        const combined = [...merged, ...batch.slice(batchStart)];
+        return combined.length > 1000 ? combined.slice(-800) : combined;
       });
     }
-  }, [events]);
+  }, [events, acknowledge]);
 
   // ── Poll tasks ──────────────────────────────────────────────────────────────
 
@@ -235,13 +319,65 @@ export function Dashboard({ config }: DashboardProps) {
       ? "LIVE"
       : pipelineState.status.toUpperCase();
 
+  const isRunning = pipelineState.status === PIPELINE_STATUSES.RUNNING;
+  const canStart = !isRunning && pipelineAction !== "starting";
+
+  const startPipeline = useCallback(async () => {
+    setPipelineAction("starting");
+    try {
+      await fetch("/api/pipeline/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(currentConfig),
+      });
+    } catch { /* handled via SSE state */ }
+    finally { setPipelineAction(null); }
+  }, [currentConfig]);
+
+  const stopPipeline = useCallback(async () => {
+    setPipelineAction("stopping");
+    try {
+      const res = await fetch("/api/pipeline/stop", { method: "POST" });
+      if (res.ok) {
+        // Optimistically update — don't wait for SSE round-trip
+        setPipelineState((prev) => ({
+          ...prev,
+          status: PIPELINE_STATUSES.STOPPED,
+          activeAgent: null,
+        }));
+      }
+    } catch { /* handled via SSE state */ }
+    finally { setPipelineAction(null); }
+  }, []);
+
+  const resetPipeline = useCallback(() => {
+    setStreamEntries([]);
+    entryCounter.current = 0;
+    activeMessageId.current = null;
+    activeReasoningId.current = null;
+    setPipelineState(INITIAL_STATE);
+  }, []);
+
+  const handleSteered = useCallback((text: string) => {
+    setStreamEntries((prev) => [
+      ...prev,
+      {
+        id: `se-${entryCounter.current++}`,
+        agent: pipelineState.activeAgent,
+        type: "system" as const,
+        content: `[YOU] ${text}`,
+        timestamp: new Date().toISOString(),
+      },
+    ]);
+  }, [pipelineState.activeAgent]);
+
   return (
     <div className="noise relative flex h-screen flex-col overflow-hidden bg-void">
       {/* ── Header ──────────────────────────────────────────────────────── */}
       <header className="glass-panel relative z-10 flex h-14 shrink-0 items-center justify-between border-t-0 border-x-0 px-5 shadow-elevation-2">
         <div className="flex items-center gap-4">
           <h1 className="text-sm font-bold uppercase tracking-[0.15em] text-accent">
-            Agentic
+            Endstate
           </h1>
           <span className="text-xs text-text-muted">
             {currentConfig.projectPath.split(/[\\/]/).pop()}
@@ -287,6 +423,104 @@ export function Dashboard({ config }: DashboardProps) {
             </span>
           )}
 
+          {/* Pipeline Start / Stop / Resume / New (2026 §4 — spring physics, glow hover) */}
+          {isRunning ? (
+            <motion.button
+              whileHover={{ scale: 1.06, boxShadow: "0 0 20px rgba(239, 68, 68, 0.25)" }}
+              whileTap={{ scale: 0.92 }}
+              transition={{ type: "spring", stiffness: 400, damping: 17 }}
+              onClick={stopPipeline}
+              disabled={pipelineAction === "stopping"}
+              className="flex items-center gap-1.5 rounded-full border border-severity-critical/20 bg-severity-critical/10 px-3.5 py-1.5 text-[10px] font-semibold uppercase tracking-widest text-severity-critical transition-colors hover:bg-severity-critical/20 disabled:opacity-40"
+              aria-label="Stop pipeline"
+            >
+              <svg className="h-3 w-3" viewBox="0 0 24 24" fill="currentColor">
+                <rect x="6" y="6" width="12" height="12" rx="2" />
+              </svg>
+              {pipelineAction === "stopping" ? (
+                <motion.span animate={{ opacity: [0.5, 1, 0.5] }} transition={{ repeat: Infinity, duration: 1 }}>
+                  Stopping…
+                </motion.span>
+              ) : "Stop"}
+            </motion.button>
+          ) : pipelineState.status === PIPELINE_STATUSES.STOPPED && pipelineState.currentCycle > 0 ? (
+            /* Stopped with history — show Resume + New Run */
+            <div className="flex items-center gap-1.5">
+              <motion.button
+                whileHover={{ scale: 1.06, boxShadow: "0 0 20px rgba(0, 229, 255, 0.25)" }}
+                whileTap={{ scale: 0.92 }}
+                transition={{ type: "spring", stiffness: 400, damping: 17 }}
+                onClick={startPipeline}
+                disabled={pipelineAction === "starting"}
+                className="flex items-center gap-1.5 rounded-full border border-accent/20 bg-accent/10 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-widest text-accent transition-colors hover:bg-accent/20 disabled:opacity-40"
+                aria-label="Resume pipeline"
+              >
+                <svg className="h-3 w-3" viewBox="0 0 24 24" fill="currentColor">
+                  <polygon points="6,4 20,12 6,20" />
+                </svg>
+                Resume
+              </motion.button>
+              <motion.button
+                whileHover={{ scale: 1.06 }}
+                whileTap={{ scale: 0.92 }}
+                transition={{ type: "spring", stiffness: 400, damping: 17 }}
+                onClick={() => { resetPipeline(); }}
+                className="rounded-full border border-border-active bg-white/[0.03] px-3 py-1.5 text-[10px] font-semibold uppercase tracking-widest text-text-secondary transition-colors hover:bg-white/[0.06] hover:text-text-primary"
+                aria-label="New run"
+              >
+                New
+              </motion.button>
+            </div>
+          ) : (
+            <motion.button
+              whileHover={{ scale: 1.06, boxShadow: "0 0 20px rgba(0, 255, 163, 0.25)" }}
+              whileTap={{ scale: 0.92 }}
+              transition={{ type: "spring", stiffness: 400, damping: 17 }}
+              onClick={startPipeline}
+              disabled={!canStart}
+              className="flex items-center gap-1.5 rounded-full border border-status-live/20 bg-status-live/10 px-3.5 py-1.5 text-[10px] font-semibold uppercase tracking-widest text-status-live transition-colors hover:bg-status-live/20 disabled:opacity-40"
+              aria-label="Start pipeline"
+            >
+              <svg className="h-3 w-3" viewBox="0 0 24 24" fill="currentColor">
+                <polygon points="6,4 20,12 6,20" />
+              </svg>
+              {pipelineAction === "starting" ? (
+                <motion.span animate={{ opacity: [0.5, 1, 0.5] }} transition={{ repeat: Infinity, duration: 1 }}>
+                  Starting…
+                </motion.span>
+              ) : "Start"}
+            </motion.button>
+          )}
+
+          {/* Git (2026 §5 — glassmorphic icon button) */}
+          <motion.button
+            onClick={() => setGitOpen(true)}
+            whileHover={{ scale: 1.1, boxShadow: "0 0 12px rgba(0, 229, 255, 0.12)" }}
+            whileTap={{ scale: 0.9 }}
+            transition={{ type: "spring", stiffness: 400, damping: 17 }}
+            className="flex items-center gap-1.5 rounded-lg p-1.5 text-text-muted transition-colors hover:bg-white/[0.04] hover:text-agent-explorer"
+            aria-label="Git"
+          >
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5" />
+            </svg>
+          </motion.button>
+
+          {/* New Project */}
+          <motion.button
+            onClick={() => setShowNewProjectConfirm(true)}
+            whileHover={{ scale: 1.1, boxShadow: "0 0 12px rgba(255, 184, 0, 0.12)" }}
+            whileTap={{ scale: 0.9 }}
+            transition={{ type: "spring", stiffness: 400, damping: 17 }}
+            className="flex items-center gap-1.5 rounded-lg p-1.5 text-text-muted transition-colors hover:bg-white/[0.04] hover:text-agent-ux"
+            aria-label="New project"
+            title="New project — return to setup wizard"
+          >
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+            </svg>
+          </motion.button>
+
           <button
             onClick={() => setSettingsOpen(true)}
             className="rounded-lg p-1.5 text-text-muted transition-colors hover:bg-white/[0.04] hover:text-text-primary"
@@ -321,7 +555,15 @@ export function Dashboard({ config }: DashboardProps) {
             activeAgent={pipelineState.activeAgent}
             cycle={pipelineState.currentCycle}
             status={pipelineState.status}
+            agentGraph={currentConfig.agentGraph}
           />
+        </ErrorBoundary>
+      </div>
+
+      {/* ── Token Usage ────────────────────────────────────────────────── */}
+      <div className="relative z-10 shrink-0">
+        <ErrorBoundary fallbackTitle="Token Usage Error">
+          <TokenUsageDisplay activeAgent={pipelineState.activeAgent} isCompacting={isCompacting} />
         </ErrorBoundary>
       </div>
 
@@ -340,10 +582,12 @@ export function Dashboard({ config }: DashboardProps) {
         {/* Sidebar */}
         <div className="flex w-[360px] shrink-0 flex-col overflow-hidden glass-panel border-t-0 border-b-0 border-r-0">
           {/* Tab bar */}
-          <div className="flex shrink-0 border-b border-border-subtle">
+          <div className="flex shrink-0 border-b border-border-subtle" role="tablist">
             {SIDEBAR_TABS.map((tab) => (
               <button
                 key={tab}
+                role="tab"
+                aria-selected={activeTab === tab}
                 onClick={() => setActiveTab(tab)}
                 className={`flex-1 py-2.5 text-center text-[10px] uppercase tracking-widest transition-colors ${
                   activeTab === tab
@@ -362,12 +606,13 @@ export function Dashboard({ config }: DashboardProps) {
           </div>
 
           {/* Tab content */}
-          <div className="flex-1 overflow-hidden">
+          <div className="flex-1 overflow-hidden" role="tabpanel">
             <ErrorBoundary fallbackTitle="Sidebar Error">
               {activeTab === "tasks" && (
                 <TaskList
                   tasks={tasks}
                   onSelectTask={setSelectedTask}
+                  onRefreshTasks={fetchTasks}
                 />
               )}
               {activeTab === "ux" && <UxScorecard tasks={tasks} />}
@@ -377,6 +622,7 @@ export function Dashboard({ config }: DashboardProps) {
                   tasks={tasks}
                 />
               )}
+              {activeTab === "awards" && <AwardsPanel />}
             </ErrorBoundary>
           </div>
         </div>
@@ -385,7 +631,7 @@ export function Dashboard({ config }: DashboardProps) {
       {/* ── Steering Bar ───────────────────────────────────────────────── */}
       <div className="relative z-10 shrink-0">
         <ErrorBoundary fallbackTitle="Steering Bar Error">
-          <SteeringBar status={pipelineState.status} />
+          <SteeringBar status={pipelineState.status} onSteered={handleSteered} />
         </ErrorBoundary>
       </div>
 
@@ -409,6 +655,66 @@ export function Dashboard({ config }: DashboardProps) {
               setSettingsOpen(false);
             }}
           />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {gitOpen && (
+          <GitPanel onClose={() => setGitOpen(false)} />
+        )}
+      </AnimatePresence>
+
+      {/* ── New Project Confirmation ───────────────────────────────────── */}
+      <AnimatePresence>
+        {showNewProjectConfirm && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) setShowNewProjectConfirm(false);
+            }}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.92, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.92, y: 10 }}
+              transition={{ type: "spring", stiffness: 400, damping: 28 }}
+              className="glass-panel w-full max-w-sm rounded-2xl p-6"
+            >
+              <h3 className="text-sm font-bold uppercase tracking-wider text-text-primary">
+                New Project?
+              </h3>
+              <p className="mt-2 text-xs leading-relaxed text-text-secondary">
+                This will open the setup wizard. Completing it will overwrite
+                the current project configuration. You can always come back
+                without saving.
+              </p>
+              <div className="mt-5 flex items-center justify-end gap-2">
+                <motion.button
+                  whileHover={{ scale: 1.03 }}
+                  whileTap={{ scale: 0.97 }}
+                  onClick={() => setShowNewProjectConfirm(false)}
+                  className="rounded-lg border border-border-subtle bg-void/50 px-4 py-2 text-[10px] font-semibold uppercase tracking-widest text-text-muted transition-colors hover:bg-elevated hover:text-text-primary"
+                >
+                  Cancel
+                </motion.button>
+                <motion.button
+                  whileHover={{ scale: 1.03, boxShadow: "0 0 16px rgba(255, 184, 0, 0.2)" }}
+                  whileTap={{ scale: 0.97 }}
+                  onClick={() => {
+                    setShowNewProjectConfirm(false);
+                    router.push("/setup");
+                  }}
+                  className="rounded-lg bg-agent-ux/10 border border-agent-ux/20 px-4 py-2 text-[10px] font-semibold uppercase tracking-widest text-agent-ux transition-colors hover:bg-agent-ux/20"
+                >
+                  Continue to Setup
+                </motion.button>
+              </div>
+            </motion.div>
+          </motion.div>
         )}
       </AnimatePresence>
 

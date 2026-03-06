@@ -4,30 +4,62 @@ import path from "node:path";
 import { z } from "zod";
 import type { PipelineConfig } from "@/lib/types";
 import { PipelineConfigSchema } from "@/lib/schemas";
+import {
+  projectConfigPath,
+  ensureProjectDir,
+  setActiveProject,
+  getActiveProjectPath,
+  migrateFromLegacy,
+} from "@/lib/pipeline/project-resolver";
 
-const CONFIG_FILENAME = ".agentic-dev.json";
-const LOCAL_CONFIG = path.join(process.cwd(), CONFIG_FILENAME);
-
-function configPath(projectPath?: string): string {
-  const base = projectPath ?? process.cwd();
-  return path.join(base, CONFIG_FILENAME);
-}
+const TARGET_CONFIG_FILENAME = ".agentic-dev.json";
 
 function loadConfig(projectPath?: string): PipelineConfig | null {
-  // Try the explicit project path first
+  // Try explicit project path → .projects/<slug>/config.json
   if (projectPath) {
-    const fp = configPath(projectPath);
-    if (fs.existsSync(fp)) {
+    const localCopy = projectConfigPath(projectPath);
+    if (fs.existsSync(localCopy)) {
       try {
-        return JSON.parse(fs.readFileSync(fp, "utf-8")) as PipelineConfig;
+        return JSON.parse(fs.readFileSync(localCopy, "utf-8")) as PipelineConfig;
+      } catch { /* fall through */ }
+    }
+    // Fall back to target project's own copy
+    const targetFp = path.join(projectPath, TARGET_CONFIG_FILENAME);
+    if (fs.existsSync(targetFp)) {
+      try {
+        return JSON.parse(fs.readFileSync(targetFp, "utf-8")) as PipelineConfig;
       } catch { /* fall through */ }
     }
   }
 
-  // Fall back to the local config (always written alongside the project config)
-  if (fs.existsSync(LOCAL_CONFIG)) {
+  // No explicit path — resolve from active project
+  const activePath = getActiveProjectPath();
+  if (activePath) {
+    const localCopy = projectConfigPath(activePath);
+    if (fs.existsSync(localCopy)) {
+      try {
+        return JSON.parse(fs.readFileSync(localCopy, "utf-8")) as PipelineConfig;
+      } catch { /* fall through */ }
+    }
+  }
+
+  // Legacy fallback: root .agentic-dev.json (triggers migration)
+  const legacyFp = path.join(process.cwd(), TARGET_CONFIG_FILENAME);
+  if (fs.existsSync(legacyFp)) {
+    migrateFromLegacy();
+    // After migration, try the new location
+    const migratedPath = getActiveProjectPath();
+    if (migratedPath) {
+      const localCopy = projectConfigPath(migratedPath);
+      if (fs.existsSync(localCopy)) {
+        try {
+          return JSON.parse(fs.readFileSync(localCopy, "utf-8")) as PipelineConfig;
+        } catch { /* fall through */ }
+      }
+    }
+    // If migration didn't work, read legacy directly
     try {
-      return JSON.parse(fs.readFileSync(LOCAL_CONFIG, "utf-8")) as PipelineConfig;
+      return JSON.parse(fs.readFileSync(legacyFp, "utf-8")) as PipelineConfig;
     } catch { /* fall through */ }
   }
 
@@ -35,14 +67,17 @@ function loadConfig(projectPath?: string): PipelineConfig | null {
 }
 
 function saveConfig(config: PipelineConfig): void {
-  // Save in the target project directory
-  const projectFp = configPath(config.projectPath);
-  fs.writeFileSync(projectFp, JSON.stringify(config, null, 2), "utf-8");
+  // Write to .projects/<slug>/config.json
+  ensureProjectDir(config.projectPath);
+  const localCopy = projectConfigPath(config.projectPath);
+  fs.writeFileSync(localCopy, JSON.stringify(config, null, 2), "utf-8");
 
-  // Also save locally so the dashboard can find it without knowing the project path
-  if (projectFp !== LOCAL_CONFIG) {
-    fs.writeFileSync(LOCAL_CONFIG, JSON.stringify(config, null, 2), "utf-8");
-  }
+  // Update active project pointer
+  setActiveProject(config.projectPath);
+
+  // Also write .agentic-dev.json in the TARGET project directory
+  const targetFp = path.join(config.projectPath, TARGET_CONFIG_FILENAME);
+  fs.writeFileSync(targetFp, JSON.stringify(config, null, 2), "utf-8");
 }
 
 export async function GET(request: Request) {

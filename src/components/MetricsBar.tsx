@@ -8,17 +8,24 @@ import { AGENT_ROLES, TASK_STATUSES, SEVERITIES } from "@/lib/types";
 // ─── Agent color map ─────────────────────────────────────────────────────────
 
 const AGENT_STYLES: Record<string, { label: string; color: string; bg: string }> = {
+  [AGENT_ROLES.RESEARCHER]: { label: "Researcher", color: "text-agent-researcher", bg: "bg-agent-researcher" },
   [AGENT_ROLES.EXPLORER]: { label: "Explorer", color: "text-agent-explorer", bg: "bg-agent-explorer" },
   [AGENT_ROLES.ANALYST]: { label: "Analyst", color: "text-agent-analyst", bg: "bg-agent-analyst" },
   [AGENT_ROLES.FIXER]: { label: "Fixer", color: "text-agent-fixer", bg: "bg-agent-fixer" },
   [AGENT_ROLES.UX_REVIEWER]: { label: "UX", color: "text-agent-ux", bg: "bg-agent-ux" },
+  [AGENT_ROLES.CODE_SIMPLIFIER]: { label: "Simplifier", color: "text-agent-simplifier", bg: "bg-agent-simplifier" },
 };
 
 interface MetricsSnapshot {
-  tokensPerAgent?: Record<string, { input: number; output: number }>;
-  avgLatencyMs?: number;
-  buildsPassed?: number;
-  buildsFailed?: number;
+  agentInputTokens?: Record<string, number>;
+  agentOutputTokens?: Record<string, number>;
+  agentTurns?: Record<string, number>;
+  toolInvocations?: Record<string, number>;
+  buildsPass?: number;
+  buildsFail?: number;
+  cyclesCompleted?: number;
+  compactions?: number;
+  contextUsage?: number;
 }
 // ─── Animated counter hook ────────────────────────────────────────────────────
 
@@ -47,7 +54,7 @@ interface MetricsBarProps {
 export function MetricsBar({ pipelineState, tasks }: MetricsBarProps) {
   const [metrics, setMetrics] = useState<MetricsSnapshot>({});
 
-  // Poll metrics
+  // Poll metrics — every 5s for responsive updates
   useEffect(() => {
     const fetchMetrics = () => {
       fetch("/api/metrics")
@@ -59,7 +66,7 @@ export function MetricsBar({ pipelineState, tasks }: MetricsBarProps) {
     };
 
     fetchMetrics();
-    const interval = setInterval(fetchMetrics, 10_000);
+    const interval = setInterval(fetchMetrics, 5_000);
     return () => clearInterval(interval);
   }, []);
 
@@ -81,10 +88,10 @@ export function MetricsBar({ pipelineState, tasks }: MetricsBarProps) {
   }, [tasks]);
 
   const buildTotal =
-    (metrics.buildsPassed ?? 0) + (metrics.buildsFailed ?? 0);
+    (metrics.buildsPass ?? 0) + (metrics.buildsFail ?? 0);
   const buildPassRate =
     buildTotal > 0
-      ? Math.round(((metrics.buildsPassed ?? 0) / buildTotal) * 100)
+      ? Math.round(((metrics.buildsPass ?? 0) / buildTotal) * 100)
       : 0;
 
   const formatTokens = (n: number) => {
@@ -94,11 +101,13 @@ export function MetricsBar({ pipelineState, tasks }: MetricsBarProps) {
   };
 
   const totalTokens = useMemo(() => {
-    if (!metrics.tokensPerAgent) return 0;
-    return Object.values(metrics.tokensPerAgent).reduce(
-      (sum, v) => sum + v.input + v.output, 0,
-    );
-  }, [metrics.tokensPerAgent]);
+    const inp = metrics.agentInputTokens ?? {};
+    const out = metrics.agentOutputTokens ?? {};
+    const allRoles = new Set([...Object.keys(inp), ...Object.keys(out)]);
+    let sum = 0;
+    for (const r of allRoles) sum += (inp[r] ?? 0) + (out[r] ?? 0);
+    return sum;
+  }, [metrics.agentInputTokens, metrics.agentOutputTokens]);
 
   return (
     <div className="flex h-full flex-col overflow-y-auto p-3 gap-4">
@@ -144,13 +153,13 @@ export function MetricsBar({ pipelineState, tasks }: MetricsBarProps) {
             <motion.div
               className="flex-1 rounded-t bg-status-live/80"
               initial={{ height: 0 }}
-              animate={{ height: buildTotal > 0 ? `${((metrics.buildsPassed ?? 0) / buildTotal) * 100}%` : "0%" }}
+              animate={{ height: buildTotal > 0 ? `${((metrics.buildsPass ?? 0) / buildTotal) * 100}%` : "0%" }}
               transition={{ type: "spring", stiffness: 200, damping: 20 }}
             />
             <motion.div
               className="flex-1 rounded-t bg-severity-critical/80"
               initial={{ height: 0 }}
-              animate={{ height: buildTotal > 0 ? `${((metrics.buildsFailed ?? 0) / buildTotal) * 100}%` : "0%" }}
+              animate={{ height: buildTotal > 0 ? `${((metrics.buildsFail ?? 0) / buildTotal) * 100}%` : "0%" }}
               transition={{ type: "spring", stiffness: 200, damping: 20 }}
             />
           </div>
@@ -158,11 +167,11 @@ export function MetricsBar({ pipelineState, tasks }: MetricsBarProps) {
             <div className="flex gap-3 text-[10px]">
               <span className="flex items-center gap-1">
                 <span className="h-1.5 w-1.5 rounded-full bg-status-live" />
-                <span className="text-text-secondary">{metrics.buildsPassed ?? 0}</span>
+                <span className="text-text-secondary">{metrics.buildsPass ?? 0}</span>
               </span>
               <span className="flex items-center gap-1">
                 <span className="h-1.5 w-1.5 rounded-full bg-severity-critical" />
-                <span className="text-text-secondary">{metrics.buildsFailed ?? 0}</span>
+                <span className="text-text-secondary">{metrics.buildsFail ?? 0}</span>
               </span>
             </div>
             <span className="font-mono text-sm font-bold text-text-primary">
@@ -172,13 +181,13 @@ export function MetricsBar({ pipelineState, tasks }: MetricsBarProps) {
         </div>
       </div>
 
-      {/* Avg latency */}
+      {/* Tool invocations */}
       <div>
         <h3 className="mb-2 text-[10px] uppercase tracking-widest text-text-muted">
-          Avg Latency
+          Tool Calls
         </h3>
         <span className="font-mono text-lg font-bold text-text-primary">
-          {metrics.avgLatencyMs ? `${(metrics.avgLatencyMs / 1000).toFixed(1)}s` : "—"}
+          {metrics.toolInvocations ? Object.values(metrics.toolInvocations).reduce((s, v) => s + v, 0) : "—"}
         </span>
       </div>
 
@@ -194,8 +203,9 @@ export function MetricsBar({ pipelineState, tasks }: MetricsBarProps) {
         </div>
         <div className="space-y-2.5">
           {Object.entries(AGENT_STYLES).map(([role, style]) => {
-            const agentTokens = metrics.tokensPerAgent?.[role];
-            const total = agentTokens ? agentTokens.input + agentTokens.output : 0;
+            const input = metrics.agentInputTokens?.[role] ?? 0;
+            const output = metrics.agentOutputTokens?.[role] ?? 0;
+            const total = input + output;
             const pct = totalTokens > 0 ? (total / totalTokens) * 100 : 0;
 
             return (

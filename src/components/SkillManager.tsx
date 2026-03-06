@@ -8,10 +8,12 @@ import { AGENT_ROLES } from "@/lib/types";
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const AGENT_COLOR_MAP: Record<AgentRole, { bg: string; text: string; label: string }> = {
+  [AGENT_ROLES.RESEARCHER]: { bg: "bg-agent-researcher/20", text: "text-agent-researcher", label: "Researcher" },
   [AGENT_ROLES.EXPLORER]: { bg: "bg-agent-explorer/20", text: "text-agent-explorer", label: "Explorer" },
   [AGENT_ROLES.ANALYST]: { bg: "bg-agent-analyst/20", text: "text-agent-analyst", label: "Analyst" },
   [AGENT_ROLES.FIXER]: { bg: "bg-agent-fixer/20", text: "text-agent-fixer", label: "Fixer" },
   [AGENT_ROLES.UX_REVIEWER]: { bg: "bg-agent-ux/20", text: "text-agent-ux", label: "UX" },
+  [AGENT_ROLES.CODE_SIMPLIFIER]: { bg: "bg-agent-simplifier/20", text: "text-agent-simplifier", label: "Simplifier" },
 };
 
 const ALL_ROLES = Object.values(AGENT_ROLES);

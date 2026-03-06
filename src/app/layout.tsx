@@ -1,12 +1,13 @@
 import type { Metadata } from "next";
 import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
+import { ThemeProvider } from "@/components/ThemeProvider";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Agentic App Dev — Autonomous Development Dashboard",
+  title: "Endstate — From Vision to Outcome",
   description:
-    "Real-time AI agent orchestration for autonomous application development",
+    "Autonomous, multi-agent software delivery. Define the outcome. Endstate handles the rest.",
 };
 
 export default function RootLayout({
@@ -15,11 +16,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="dark">
+    <html lang="en" className="dark" suppressHydrationWarning>
       <body
         className={`${GeistSans.variable} ${GeistMono.variable} antialiased`}
       >
-        {children}
+        <ThemeProvider>{children}</ThemeProvider>
       </body>
     </html>
   );

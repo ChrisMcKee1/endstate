@@ -62,7 +62,7 @@ $d.Multiselect = $false
 if ($d.ShowDialog()) { Write-Output $d.FolderName }
 `.trim();
 
-  const tmpScript = path.join(os.tmpdir(), `agentic-browse-${Date.now()}.ps1`);
+  const tmpScript = path.join(os.tmpdir(), `endstate-browse-${Date.now()}.ps1`);
 
   try {
     fs.writeFileSync(tmpScript, script, "utf-8");

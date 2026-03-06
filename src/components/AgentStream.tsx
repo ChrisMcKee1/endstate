@@ -9,6 +9,13 @@ import type { StreamEntry } from "@/components/Dashboard";
 // ─── Agent color map ─────────────────────────────────────────────────────────
 
 const AGENT_COLORS: Record<string, { text: string; bg: string; dot: string; glow: string; gradient: string }> = {
+  [AGENT_ROLES.RESEARCHER]: {
+    text: "text-agent-researcher",
+    bg: "bg-agent-researcher/10",
+    dot: "bg-agent-researcher",
+    glow: "shadow-[0_0_8px_rgba(255,107,107,0.5)]",
+    gradient: "from-agent-researcher/[0.03]",
+  },
   [AGENT_ROLES.EXPLORER]: {
     text: "text-agent-explorer",
     bg: "bg-agent-explorer/10",
@@ -37,13 +44,22 @@ const AGENT_COLORS: Record<string, { text: string; bg: string; dot: string; glow
     glow: "shadow-[0_0_8px_rgba(255,184,0,0.5)]",
     gradient: "from-agent-ux/[0.03]",
   },
+  [AGENT_ROLES.CODE_SIMPLIFIER]: {
+    text: "text-agent-simplifier",
+    bg: "bg-agent-simplifier/10",
+    dot: "bg-agent-simplifier",
+    glow: "shadow-[0_0_8px_rgba(255,105,180,0.5)]",
+    gradient: "from-agent-simplifier/[0.03]",
+  },
 };
 
 const AGENT_LABELS: Record<string, string> = {
+  [AGENT_ROLES.RESEARCHER]: "RESEARCHER",
   [AGENT_ROLES.EXPLORER]: "EXPLORER",
   [AGENT_ROLES.ANALYST]: "ANALYST",
   [AGENT_ROLES.FIXER]: "FIXER",
   [AGENT_ROLES.UX_REVIEWER]: "UX",
+  [AGENT_ROLES.CODE_SIMPLIFIER]: "SIMPLIFIER",
 };
 
 const TYPE_ICONS: Record<StreamEntry["type"], string> = {
@@ -93,19 +109,33 @@ export function AgentStream({ entries, activeAgent }: AgentStreamProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [autoScroll, setAutoScroll] = useState(true);
   const [expandedTools, setExpandedTools] = useState<Set<string>>(new Set());
+  const isScrollingProgrammatically = useRef(false);
 
-  // Auto-scroll to bottom
+  // Auto-scroll to bottom whenever entries change
   useEffect(() => {
-    if (autoScroll && scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
+    if (!autoScroll || !scrollRef.current) return;
+    // Double-rAF ensures DOM has painted with new content heights
+    const frame = requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (scrollRef.current) {
+          isScrollingProgrammatically.current = true;
+          scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+          // Reset flag after scroll event fires
+          setTimeout(() => { isScrollingProgrammatically.current = false; }, 50);
+        }
+      });
+    });
+    return () => cancelAnimationFrame(frame);
   }, [entries, autoScroll]);
 
-  // Detect user scroll
+  // Detect ONLY user-initiated scrolls
   const handleScroll = useCallback(() => {
+    // Skip scroll events caused by our programmatic scrollTop assignment
+    if (isScrollingProgrammatically.current) return;
     const el = scrollRef.current;
     if (!el) return;
-    const isAtBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 50;
+    // 150px threshold is generous — rapidly growing content won't accidentally disable auto-scroll
+    const isAtBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 150;
     setAutoScroll(isAtBottom);
   }, []);
 
@@ -129,22 +159,25 @@ export function AgentStream({ entries, activeAgent }: AgentStreamProps) {
               transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
               className="inline-block h-2.5 w-2.5 rounded-full bg-accent/50"
             />
-            <span className="text-[10px] uppercase tracking-widest">
+            <span className="text-[10px] uppercase tracking-widest text-text-secondary">
               Awaiting agent activity
             </span>
           </div>
-          <p className="max-w-xs text-center text-xs text-text-muted/60">
+          <p className="max-w-xs text-center text-xs text-text-muted">
             Start the pipeline or connect to an active session
           </p>
         </div>
       );
     }
 
-    return entries.map((entry, i) => {
-      const colors = entry.agent
-        ? AGENT_COLORS[entry.agent]
-        : { text: "text-text-muted", bg: "bg-overlay", dot: "bg-text-muted", glow: "", gradient: "from-transparent" };
-      const label = entry.agent ? AGENT_LABELS[entry.agent] : "SYS";
+    return entries.map((entry) => {
+      const isUserMessage = entry.type === "system" && entry.content.startsWith("[YOU]");
+      const colors = isUserMessage
+        ? { text: "text-accent", bg: "bg-accent/10", dot: "bg-accent", glow: "shadow-[0_0_8px_rgba(0,229,255,0.4)]", gradient: "from-accent/[0.04]" }
+        : entry.agent
+          ? AGENT_COLORS[entry.agent]
+          : { text: "text-text-muted", bg: "bg-overlay", dot: "bg-text-muted", glow: "", gradient: "from-transparent" };
+      const label = isUserMessage ? "YOU" : entry.agent ? AGENT_LABELS[entry.agent] : "SYS";
       const isToolEntry =
         entry.type === "tool-start" || entry.type === "tool-complete";
       const isExpanded = expandedTools.has(entry.id);
@@ -157,7 +190,6 @@ export function AgentStream({ entries, activeAgent }: AgentStreamProps) {
           variants={entryVariants}
           initial="hidden"
           animate="visible"
-          transition={{ delay: Math.min(i * 0.02, 0.3) }}
           className={`group relative flex gap-2.5 px-4 py-1.5 transition-colors hover:bg-white/[0.02] ${
             isError ? "bg-severity-critical/5" : ""
           } bg-gradient-to-r ${colors.gradient} to-transparent`}
@@ -173,7 +205,7 @@ export function AgentStream({ entries, activeAgent }: AgentStreamProps) {
           )}
 
           {/* Timestamp */}
-          <span className="shrink-0 pt-0.5 font-mono text-[10px] text-text-muted/40">
+          <span className="shrink-0 pt-0.5 font-mono text-[10px] text-text-muted/70">
             {formatTime(entry.timestamp)}
           </span>
 
@@ -186,12 +218,13 @@ export function AgentStream({ entries, activeAgent }: AgentStreamProps) {
           </div>
 
           {/* Content */}
-          <div className="min-w-0 flex-1">
+          <div className="min-w-0 flex-1 overflow-hidden">
             {isToolEntry ? (
               <div>
                 <button
                   onClick={() => toggleTool(entry.id)}
                   className="flex items-center gap-1.5 text-left"
+                  aria-expanded={isExpanded}
                 >
                   <span className="text-[10px]">{TYPE_ICONS[entry.type]}</span>
                   <span
@@ -226,7 +259,7 @@ export function AgentStream({ entries, activeAgent }: AgentStreamProps) {
                       initial="collapsed"
                       animate="expanded"
                       exit="collapsed"
-                      className="mt-1.5 max-h-40 overflow-auto glass-panel rounded-lg p-2.5 font-mono text-[10px] text-text-secondary"
+                      className="mt-1.5 max-h-40 overflow-auto overflow-x-auto glass-panel rounded-lg p-2.5 font-mono text-[10px] text-text-secondary"
                     >
                       {entry.toolArgs || entry.toolResult || "No data"}
                     </motion.pre>
@@ -235,18 +268,17 @@ export function AgentStream({ entries, activeAgent }: AgentStreamProps) {
               </div>
             ) : (
               <span
-                className={`font-mono text-xs leading-relaxed ${
-                  entry.type === "reasoning"
-                    ? "italic text-text-muted"
-                    : isError
-                      ? "text-severity-critical"
-                      : "text-text-primary/90"
+                className={`whitespace-pre-wrap break-words font-mono text-xs leading-relaxed phosphor-text ${
+                  isUserMessage
+                    ? "font-semibold text-accent"
+                    : entry.type === "reasoning"
+                      ? "italic text-text-muted"
+                      : isError
+                        ? "text-severity-critical"
+                        : "text-text-primary/90"
                 }`}
               >
-                {entry.type === "reasoning" && (
-                  <span className="mr-1 text-[10px]">🧠</span>
-                )}
-                {entry.content}
+                {isUserMessage ? entry.content.replace(/^\[YOU\]\s*/, "") : entry.content}
                 {entry.type === "message" && isActive && (
                   <motion.span
                     animate={{ opacity: [1, 0, 1] }}
@@ -263,7 +295,7 @@ export function AgentStream({ entries, activeAgent }: AgentStreamProps) {
   };
 
   return (
-    <div className="relative flex h-full flex-col">
+    <div className="relative flex h-full flex-col scanlines vignette">
       {/* Scroll container */}
       <div
         ref={scrollRef}

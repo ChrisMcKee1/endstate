@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, type FormEvent } from "react";
+import { useState, useCallback, useEffect, type FormEvent } from "react";
 import { motion } from "framer-motion";
 import type { PipelineStatus } from "@/lib/types";
 import { PIPELINE_STATUSES } from "@/lib/types";
@@ -15,14 +15,22 @@ const QUICK_CHIPS = [
 
 interface SteeringBarProps {
   status: PipelineStatus;
+  onSteered?: (message: string) => void;
 }
 
-export function SteeringBar({ status }: SteeringBarProps) {
+export function SteeringBar({ status, onSteered }: SteeringBarProps) {
   const [message, setMessage] = useState("");
   const [sending, setSending] = useState(false);
   const [lastSent, setLastSent] = useState<string | null>(null);
 
   const isRunning = status === PIPELINE_STATUSES.RUNNING;
+
+  // Auto-dismiss "Sent ✓" after 3 seconds
+  useEffect(() => {
+    if (!lastSent) return;
+    const timer = setTimeout(() => setLastSent(null), 3000);
+    return () => clearTimeout(timer);
+  }, [lastSent]);
 
   const send = useCallback(
     async (text: string) => {
@@ -40,6 +48,7 @@ export function SteeringBar({ status }: SteeringBarProps) {
         if (res.ok) {
           setLastSent(text.trim());
           setMessage("");
+          onSteered?.(text.trim());
         }
       } catch {
         /* network error — silent */
@@ -47,7 +56,7 @@ export function SteeringBar({ status }: SteeringBarProps) {
         setSending(false);
       }
     },
-    [sending],
+    [sending, onSteered],
   );
 
   const handleSubmit = (e: FormEvent) => {
@@ -66,7 +75,7 @@ export function SteeringBar({ status }: SteeringBarProps) {
             whileTap={{ scale: 0.96 }}
             onClick={() => send(chip.message)}
             disabled={sending || !isRunning}
-            className="shrink-0 rounded-full border border-border-active bg-white/[0.03] px-3.5 py-1.5 text-[11px] font-medium text-text-secondary transition-colors hover:border-accent/30 hover:text-accent disabled:opacity-30"
+            className="shrink-0 rounded-full border border-border-active bg-white/[0.04] px-3.5 py-1.5 text-[11px] font-medium text-text-secondary transition-colors hover:border-accent/30 hover:text-accent disabled:opacity-50"
           >
             {chip.label}
           </motion.button>

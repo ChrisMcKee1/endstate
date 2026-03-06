@@ -53,7 +53,10 @@ otel-data/
 # yarn.lock
 # pnpm-lock.yaml
 
+# Per-project runtime data (config copies, tasks, agent output)
+.projects/
+
 # Runtime config generated in target projects
 # .agentic-dev.json  (tracked per-project, but not in this repo)
 .playwright-cli/*
-*.png
+

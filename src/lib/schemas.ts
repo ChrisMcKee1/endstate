@@ -11,10 +11,12 @@ const severityEnum = z.enum([
 ]);
 
 const agentRoleEnum = z.enum([
+  AGENT_ROLES.RESEARCHER,
   AGENT_ROLES.EXPLORER,
   AGENT_ROLES.ANALYST,
   AGENT_ROLES.FIXER,
   AGENT_ROLES.UX_REVIEWER,
+  AGENT_ROLES.CODE_SIMPLIFIER,
 ]);
 
 const reasoningEffortEnum = z.enum([
@@ -79,6 +81,15 @@ export const PipelineConfigSchema = z.object({
   enableAnalyst: z.boolean(),
   enableFixer: z.boolean(),
   enableUxReviewer: z.boolean(),
+  enableResearcher: z.boolean().default(true),
+  enableCodeSimplifier: z.boolean().default(true),
+  agentGraph: z.array(z.object({
+    role: agentRoleEnum,
+    nodeType: z.enum(["entry", "cycle", "gate", "exit"]),
+    runAfter: z.array(agentRoleEnum),
+    parallel: z.boolean(),
+    enabled: z.boolean(),
+  })).default([]),
   reasoningEffort: reasoningEffortEnum.optional(),
   skills: z.array(SkillDefinitionSchema).default([]),
   customAgentDefinitions: z.array(CustomAgentDefinitionSchema).default([]),

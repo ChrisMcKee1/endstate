@@ -1,12 +1,17 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import {
   getAllTasks,
   getTask,
   getTasksByStatus,
   getTasksBySeverity,
+  createTask,
+  deleteTask,
+  deleteTasks,
+  patchTask,
 } from "@/lib/pipeline/task-store";
 import type { TaskStatus, Severity } from "@/lib/types";
-import { TASK_STATUSES, SEVERITIES } from "@/lib/types";
+import { TASK_STATUSES, SEVERITIES, AGENT_ROLES, TASK_ACTIONS } from "@/lib/types";
 
 const VALID_STATUSES = new Set(Object.values(TASK_STATUSES));
 const VALID_SEVERITIES = new Set(Object.values(SEVERITIES));
@@ -53,4 +58,78 @@ export async function GET(request: Request) {
   // All tasks
   const tasks = getAllTasks();
   return NextResponse.json({ tasks }, { status: 200 });
+}
+
+// ─── POST: create a task manually ────────────────────────────────────────────
+
+const CreateTaskSchema = z.object({
+  title: z.string().min(1),
+  severity: z.enum([SEVERITIES.CRITICAL, SEVERITIES.HIGH, SEVERITIES.MEDIUM, SEVERITIES.LOW]),
+  component: z.string().min(1),
+  detail: z.string().min(1),
+});
+
+export async function POST(request: Request) {
+  try {
+    const body: unknown = await request.json();
+    const data = CreateTaskSchema.parse(body);
+    const task = createTask({
+      ...data,
+      cycle: 0,
+      agent: AGENT_ROLES.EXPLORER, // manual tasks attributed to explorer
+    });
+    return NextResponse.json({ task }, { status: 201 });
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      return NextResponse.json({ error: "Invalid input", details: err.issues }, { status: 400 });
+    }
+    return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status: 500 });
+  }
+}
+
+// ─── PATCH: update a task ────────────────────────────────────────────────────
+
+const PatchTaskSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().min(1).optional(),
+  severity: z.enum([SEVERITIES.CRITICAL, SEVERITIES.HIGH, SEVERITIES.MEDIUM, SEVERITIES.LOW]).optional(),
+  status: z.enum([TASK_STATUSES.OPEN, TASK_STATUSES.IN_PROGRESS, TASK_STATUSES.RESOLVED, TASK_STATUSES.DEFERRED, TASK_STATUSES.WONT_FIX]).optional(),
+  component: z.string().min(1).optional(),
+});
+
+export async function PATCH(request: Request) {
+  try {
+    const body: unknown = await request.json();
+    const { id, ...patch } = PatchTaskSchema.parse(body);
+    const task = patchTask(id, patch);
+    if (!task) {
+      return NextResponse.json({ error: "Task not found" }, { status: 404 });
+    }
+    return NextResponse.json({ task }, { status: 200 });
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      return NextResponse.json({ error: "Invalid input", details: err.issues }, { status: 400 });
+    }
+    return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status: 500 });
+  }
+}
+
+// ─── DELETE: delete tasks ────────────────────────────────────────────────────
+
+const DeleteTaskSchema = z.object({
+  ids: z.array(z.string().min(1)).min(1),
+});
+
+export async function DELETE(request: Request) {
+  try {
+    const body: unknown = await request.json();
+    const { ids } = DeleteTaskSchema.parse(body);
+    const count = deleteTasks(ids);
+    return NextResponse.json({ deleted: count }, { status: 200 });
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      return NextResponse.json({ error: "Invalid input", details: err.issues }, { status: 400 });
+    }
+    return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status: 500 });
+  }
 }

@@ -1,6 +1,6 @@
 import { trace, type Span, SpanStatusCode } from "@opentelemetry/api";
 
-const tracer = trace.getTracer("agentic-app-dev");
+const tracer = trace.getTracer("endstate");
 
 // ─── Pipeline ─────────────────────────────────────────────────────────────────
 

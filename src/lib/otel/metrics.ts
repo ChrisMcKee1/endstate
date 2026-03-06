@@ -1,6 +1,6 @@
 import { metrics } from "@opentelemetry/api";
 
-const meter = metrics.getMeter("agentic-app-dev");
+const meter = metrics.getMeter("endstate");
 
 // ─── Pipeline Counters ────────────────────────────────────────────────────────
 
