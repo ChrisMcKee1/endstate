@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import type {
   SkillDefinition,
   CustomAgentDefinition,
@@ -23,6 +24,8 @@ const TAB_META: Record<CustomizationTab, { label: string; icon: string }> = {
   mcp:     { label: "MCP Servers", icon: "🔌" },
   tools:   { label: "Tools",       icon: "🔧" },
 };
+
+const SPRING = { type: "spring" as const, stiffness: 300, damping: 28 };
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -58,21 +61,28 @@ export function CustomizationPanel({
   return (
     <div className="flex h-full flex-col">
       {/* Tab bar */}
-      <div className="flex shrink-0 border-b border-border-subtle">
+      <div className="relative flex shrink-0 border-b border-white/[0.04]">
         {TABS.map((tab) => {
           const meta = TAB_META[tab];
           return (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`flex flex-1 items-center justify-center gap-1.5 py-2.5 text-center font-[family-name:var(--font-display)] text-[10px] uppercase tracking-widest transition-colors ${
+              className={`relative flex flex-1 items-center justify-center gap-1.5 py-2.5 text-center text-[10px] uppercase tracking-widest transition-colors ${
                 activeTab === tab
-                  ? "border-b-2 border-accent text-accent"
+                  ? "text-accent"
                   : "text-text-muted hover:text-text-secondary"
               }`}
             >
               <span className="text-xs">{meta.icon}</span>
               <span>{meta.label}</span>
+              {activeTab === tab && (
+                <motion.div
+                  className="absolute inset-x-0 bottom-0 h-0.5 bg-accent"
+                  layoutId="customization-tab-underline"
+                  transition={SPRING}
+                />
+              )}
             </button>
           );
         })}
@@ -80,45 +90,49 @@ export function CustomizationPanel({
 
       {/* Tab content */}
       <div className="flex-1 overflow-y-auto p-4">
-        <div className="animate-fade-in" key={activeTab}>
-          {activeTab === "skills" && (
-            <SkillManager
-              skills={skills}
-              onChange={onSkillsChange}
-              projectPath={projectPath}
-            />
-          )}
-          {activeTab === "agents" && (
-            <CustomAgentManager
-              agents={customAgents}
-              onChange={onCustomAgentsChange}
-            />
-          )}
-          {activeTab === "mcp" && (
-            <McpServerManager
-              servers={mcpServers}
-              onChange={onMcpServersChange}
-              projectPath={projectPath}
-            />
-          )}
-          {activeTab === "tools" && (
-            <ToolManager
-              tools={toolOverrides}
-              onChange={onToolOverridesChange}
-            />
-          )}
-        </div>
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={activeTab}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={SPRING}
+          >
+            {activeTab === "skills" && (
+              <SkillManager skills={skills} onChange={onSkillsChange} projectPath={projectPath} />
+            )}
+            {activeTab === "agents" && (
+              <CustomAgentManager agents={customAgents} onChange={onCustomAgentsChange} />
+            )}
+            {activeTab === "mcp" && (
+              <McpServerManager servers={mcpServers} onChange={onMcpServersChange} projectPath={projectPath} />
+            )}
+            {activeTab === "tools" && (
+              <ToolManager tools={toolOverrides} onChange={onToolOverridesChange} />
+            )}
+          </motion.div>
+        </AnimatePresence>
       </div>
 
       {/* Save footer */}
-      <div className="shrink-0 border-t border-border-subtle p-4">
-        <button
+      <div
+        className="shrink-0 border-t border-white/[0.04] p-4"
+        style={{ background: "rgba(20, 21, 31, 0.5)" }}
+      >
+        <motion.button
           onClick={onSave}
           disabled={saving}
-          className="w-full rounded-lg bg-accent py-2.5 font-[family-name:var(--font-display)] text-xs font-bold uppercase tracking-wider text-void transition-opacity hover:opacity-90 disabled:opacity-50"
+          className="w-full rounded-xl py-2.5 text-xs font-bold uppercase tracking-wider text-void transition-opacity disabled:opacity-50"
+          style={{
+            background: "linear-gradient(135deg, #00FFA3 0%, #00E5FF 100%)",
+            boxShadow: "0 0 20px rgba(0, 255, 163, 0.15)",
+          }}
+          whileTap={{ scale: 0.98 }}
+          whileHover={{ boxShadow: "0 0 28px rgba(0, 255, 163, 0.25)" }}
+          transition={SPRING}
         >
           {saving ? "Saving…" : "Save Customizations"}
-        </button>
+        </motion.button>
       </div>
     </div>
   );

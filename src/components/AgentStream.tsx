@@ -1,32 +1,41 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import type { AgentRole } from "@/lib/types";
 import { AGENT_ROLES } from "@/lib/types";
 import type { StreamEntry } from "@/components/Dashboard";
 
 // ─── Agent color map ─────────────────────────────────────────────────────────
 
-const AGENT_COLORS: Record<string, { text: string; bg: string; border: string }> = {
+const AGENT_COLORS: Record<string, { text: string; bg: string; dot: string; glow: string; gradient: string }> = {
   [AGENT_ROLES.EXPLORER]: {
     text: "text-agent-explorer",
     bg: "bg-agent-explorer/10",
-    border: "border-agent-explorer/20",
+    dot: "bg-agent-explorer",
+    glow: "shadow-[0_0_8px_rgba(0,229,255,0.5)]",
+    gradient: "from-agent-explorer/[0.03]",
   },
   [AGENT_ROLES.ANALYST]: {
     text: "text-agent-analyst",
     bg: "bg-agent-analyst/10",
-    border: "border-agent-analyst/20",
+    dot: "bg-agent-analyst",
+    glow: "shadow-[0_0_8px_rgba(176,38,255,0.5)]",
+    gradient: "from-agent-analyst/[0.03]",
   },
   [AGENT_ROLES.FIXER]: {
     text: "text-agent-fixer",
     bg: "bg-agent-fixer/10",
-    border: "border-agent-fixer/20",
+    dot: "bg-agent-fixer",
+    glow: "shadow-[0_0_8px_rgba(0,255,163,0.5)]",
+    gradient: "from-agent-fixer/[0.03]",
   },
   [AGENT_ROLES.UX_REVIEWER]: {
     text: "text-agent-ux",
     bg: "bg-agent-ux/10",
-    border: "border-agent-ux/20",
+    dot: "bg-agent-ux",
+    glow: "shadow-[0_0_8px_rgba(255,184,0,0.5)]",
+    gradient: "from-agent-ux/[0.03]",
   },
 };
 
@@ -44,6 +53,18 @@ const TYPE_ICONS: Record<StreamEntry["type"], string> = {
   reasoning: "🧠",
   error: "❌",
   system: "📡",
+};
+
+// ─── Animation variants ──────────────────────────────────────────────────────
+
+const entryVariants = {
+  hidden: { opacity: 0, x: -8 },
+  visible: { opacity: 1, x: 0, transition: { type: "spring" as const, stiffness: 500, damping: 30 } },
+};
+
+const toolExpandVariants = {
+  collapsed: { height: 0, opacity: 0 },
+  expanded: { height: "auto", opacity: 1, transition: { type: "spring" as const, stiffness: 300, damping: 25 } },
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -103,8 +124,12 @@ export function AgentStream({ entries, activeAgent }: AgentStreamProps) {
       return (
         <div className="flex h-full flex-col items-center justify-center gap-3 text-text-muted">
           <div className="flex items-center gap-2">
-            <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-accent/50" />
-            <span className="font-[family-name:var(--font-display)] text-[10px] uppercase tracking-widest">
+            <motion.span
+              animate={{ opacity: [0.3, 1, 0.3] }}
+              transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
+              className="inline-block h-2.5 w-2.5 rounded-full bg-accent/50"
+            />
+            <span className="text-[10px] uppercase tracking-widest">
               Awaiting agent activity
             </span>
           </div>
@@ -115,34 +140,50 @@ export function AgentStream({ entries, activeAgent }: AgentStreamProps) {
       );
     }
 
-    return entries.map((entry) => {
+    return entries.map((entry, i) => {
       const colors = entry.agent
         ? AGENT_COLORS[entry.agent]
-        : { text: "text-text-muted", bg: "bg-overlay", border: "border-border-subtle" };
+        : { text: "text-text-muted", bg: "bg-overlay", dot: "bg-text-muted", glow: "", gradient: "from-transparent" };
       const label = entry.agent ? AGENT_LABELS[entry.agent] : "SYS";
       const isToolEntry =
         entry.type === "tool-start" || entry.type === "tool-complete";
       const isExpanded = expandedTools.has(entry.id);
       const isError = entry.type === "error";
+      const isActive = activeAgent === entry.agent;
 
       return (
-        <div
+        <motion.div
           key={entry.id}
-          className={`group flex gap-2 px-4 py-1 transition-colors hover:bg-white/[0.02] ${
+          variants={entryVariants}
+          initial="hidden"
+          animate="visible"
+          transition={{ delay: Math.min(i * 0.02, 0.3) }}
+          className={`group relative flex gap-2.5 px-4 py-1.5 transition-colors hover:bg-white/[0.02] ${
             isError ? "bg-severity-critical/5" : ""
-          }`}
+          } bg-gradient-to-r ${colors.gradient} to-transparent`}
         >
+          {/* Active agent glow bar */}
+          {isActive && (
+            <motion.div
+              layoutId="activeAgentBar"
+              className={`absolute left-0 top-0 h-full w-[2px] ${colors.dot}`}
+              animate={{ opacity: [0.5, 1, 0.5] }}
+              transition={{ repeat: Infinity, duration: 1.5, ease: "easeInOut" }}
+            />
+          )}
+
           {/* Timestamp */}
-          <span className="shrink-0 pt-0.5 font-[family-name:var(--font-code)] text-[10px] text-text-muted/50">
+          <span className="shrink-0 pt-0.5 font-mono text-[10px] text-text-muted/40">
             {formatTime(entry.timestamp)}
           </span>
 
-          {/* Agent badge */}
-          <span
-            className={`shrink-0 rounded px-1.5 py-0.5 font-[family-name:var(--font-display)] text-[9px] font-bold tracking-wider ${colors.bg} ${colors.text} ${colors.border} border`}
-          >
-            {label}
-          </span>
+          {/* Agent dot + label */}
+          <div className="flex shrink-0 items-center gap-1.5">
+            <span className={`h-2.5 w-2.5 rounded-full ${colors.dot} ${colors.glow}`} />
+            <span className={`text-[9px] font-bold tracking-wider ${colors.text}`}>
+              {label}
+            </span>
+          </div>
 
           {/* Content */}
           <div className="min-w-0 flex-1">
@@ -154,7 +195,7 @@ export function AgentStream({ entries, activeAgent }: AgentStreamProps) {
                 >
                   <span className="text-[10px]">{TYPE_ICONS[entry.type]}</span>
                   <span
-                    className={`font-[family-name:var(--font-code)] text-xs ${
+                    className={`font-mono text-xs ${
                       entry.type === "tool-complete"
                         ? "text-status-live/70"
                         : "text-text-secondary"
@@ -162,10 +203,10 @@ export function AgentStream({ entries, activeAgent }: AgentStreamProps) {
                   >
                     {entry.content}
                   </span>
-                  <svg
-                    className={`h-3 w-3 text-text-muted transition-transform ${
-                      isExpanded ? "rotate-90" : ""
-                    }`}
+                  <motion.svg
+                    animate={{ rotate: isExpanded ? 90 : 0 }}
+                    transition={{ type: "spring", stiffness: 300, damping: 20 }}
+                    className="h-3 w-3 text-text-muted"
                     fill="none"
                     viewBox="0 0 24 24"
                     stroke="currentColor"
@@ -176,17 +217,25 @@ export function AgentStream({ entries, activeAgent }: AgentStreamProps) {
                       strokeLinejoin="round"
                       d="M8.25 4.5l7.5 7.5-7.5 7.5"
                     />
-                  </svg>
+                  </motion.svg>
                 </button>
-                {isExpanded && (
-                  <pre className="mt-1 max-h-40 overflow-auto rounded border border-border-subtle bg-void/50 p-2 font-[family-name:var(--font-code)] text-[10px] text-text-muted">
-                    {entry.toolArgs || entry.toolResult || "No data"}
-                  </pre>
-                )}
+                <AnimatePresence>
+                  {isExpanded && (
+                    <motion.pre
+                      variants={toolExpandVariants}
+                      initial="collapsed"
+                      animate="expanded"
+                      exit="collapsed"
+                      className="mt-1.5 max-h-40 overflow-auto glass-panel rounded-lg p-2.5 font-mono text-[10px] text-text-secondary"
+                    >
+                      {entry.toolArgs || entry.toolResult || "No data"}
+                    </motion.pre>
+                  )}
+                </AnimatePresence>
               </div>
             ) : (
               <span
-                className={`font-[family-name:var(--font-code)] text-xs leading-relaxed ${
+                className={`font-mono text-xs leading-relaxed ${
                   entry.type === "reasoning"
                     ? "italic text-text-muted"
                     : isError
@@ -198,14 +247,17 @@ export function AgentStream({ entries, activeAgent }: AgentStreamProps) {
                   <span className="mr-1 text-[10px]">🧠</span>
                 )}
                 {entry.content}
-                {entry.type === "message" &&
-                  activeAgent === entry.agent && (
-                    <span className="ml-0.5 inline-block h-3 w-[2px] bg-current animate-typing-blink" />
-                  )}
+                {entry.type === "message" && isActive && (
+                  <motion.span
+                    animate={{ opacity: [1, 0, 1] }}
+                    transition={{ repeat: Infinity, duration: 0.8, ease: "easeInOut" }}
+                    className="ml-0.5 inline-block h-3.5 w-[2px] bg-accent"
+                  />
+                )}
               </span>
             )}
           </div>
-        </div>
+        </motion.div>
       );
     });
   };
@@ -222,33 +274,39 @@ export function AgentStream({ entries, activeAgent }: AgentStreamProps) {
       </div>
 
       {/* Scroll-to-bottom button */}
-      {!autoScroll && entries.length > 0 && (
-        <button
-          onClick={() => {
-            setAutoScroll(true);
-            scrollRef.current?.scrollTo({
-              top: scrollRef.current.scrollHeight,
-              behavior: "smooth",
-            });
-          }}
-          className="absolute bottom-3 right-3 flex items-center gap-1.5 rounded-full border border-border-active bg-elevated px-3 py-1.5 text-xs text-text-secondary shadow-lg transition-colors hover:bg-overlay hover:text-text-primary"
-        >
-          <svg
-            className="h-3 w-3"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={2}
+      <AnimatePresence>
+        {!autoScroll && entries.length > 0 && (
+          <motion.button
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 10 }}
+            transition={{ type: "spring", stiffness: 400, damping: 25 }}
+            onClick={() => {
+              setAutoScroll(true);
+              scrollRef.current?.scrollTo({
+                top: scrollRef.current.scrollHeight,
+                behavior: "smooth",
+              });
+            }}
+            className="absolute bottom-3 right-3 flex items-center gap-1.5 glass-panel rounded-full px-3 py-1.5 text-xs text-text-secondary shadow-elevation-2 transition-colors hover:text-text-primary"
           >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M19.5 13.5L12 21m0 0l-7.5-7.5M12 21V3"
-            />
-          </svg>
-          Follow
-        </button>
-      )}
+            <svg
+              className="h-3 w-3"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2}
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M19.5 13.5L12 21m0 0l-7.5-7.5M12 21V3"
+              />
+            </svg>
+            Follow
+          </motion.button>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

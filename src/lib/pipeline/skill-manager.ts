@@ -2,7 +2,9 @@ import fs from "node:fs";
 import path from "node:path";
 import AdmZip from "adm-zip";
 import type { AgentRole, SkillDefinition, SkillSource } from "@/lib/types";
-import { SKILL_SOURCES } from "@/lib/types";
+import { SKILL_SOURCES, AGENT_ROLES } from "@/lib/types";
+
+const ALL_ROLES: AgentRole[] = Object.values(AGENT_ROLES);
 
 // ─── Frontmatter parser ───────────────────────────────────────────────────────
 
@@ -40,13 +42,18 @@ function buildSkillDefinition(
   const frontmatter = parseFrontmatter(content);
   const basename = path.basename(filePath, path.extname(filePath));
 
+  // For subdirectory skills (e.g., copilot-sdk/SKILL.md), use the parent dir
+  // name as the ID to avoid all of them getting id="SKILL"
+  const parentDir = path.basename(path.dirname(filePath));
+  const id = basename.toUpperCase() === "SKILL" ? parentDir : basename;
+
   return {
-    id: basename,
-    name: frontmatter.name ?? basename,
+    id,
+    name: frontmatter.name ?? id,
     description: frontmatter.description ?? "",
     filePath,
     enabled: true,
-    assignedAgents: [],
+    assignedAgents: [...ALL_ROLES],
     source,
   };
 }

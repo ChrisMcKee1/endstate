@@ -1,7 +1,9 @@
 import fs from "node:fs";
 import path from "node:path";
 import type { AgentRole, McpServerEntry } from "@/lib/types";
-import { MCP_SERVER_TYPES } from "@/lib/types";
+import { MCP_SERVER_TYPES, AGENT_ROLES } from "@/lib/types";
+
+const ALL_ROLES: AgentRole[] = Object.values(AGENT_ROLES);
 
 // ─── MCP config file structures ──────────────────────────────────────────────
 
@@ -55,7 +57,7 @@ function parseConfigFile(filePath: string): McpServerEntry[] {
       headers: config.headers,
       tools: config.tools ?? ["*"],
       enabled: true,
-      assignedAgents: [],
+      assignedAgents: [...ALL_ROLES],
     });
   }
 

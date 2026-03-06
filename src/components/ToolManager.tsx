@@ -1,5 +1,6 @@
 "use client";
 
+import { motion } from "framer-motion";
 import type { ToolEntry, ToolType } from "@/lib/types";
 import { TOOL_TYPES } from "@/lib/types";
 
@@ -41,6 +42,15 @@ const CATEGORY_ICONS: Record<ToolCategory, string> = {
   Search: "🔍",
 };
 
+const CATEGORY_ACCENT: Record<ToolCategory, string> = {
+  "File Operations": "#00E5FF",
+  Shell: "#FFB800",
+  Git: "#B026FF",
+  Search: "#00FFA3",
+};
+
+const SPRING = { type: "spring" as const, stiffness: 300, damping: 26 };
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 interface ToolManagerProps {
@@ -49,7 +59,6 @@ interface ToolManagerProps {
 }
 
 export function ToolManager({ tools, onChange }: ToolManagerProps) {
-  // Build merged list: known tools with user overrides applied
   const toolMap = new Map(tools.map((t) => [t.name, t]));
 
   const getEntry = (name: string, type: ToolType): ToolEntry => {
@@ -61,7 +70,6 @@ export function ToolManager({ tools, onChange }: ToolManagerProps) {
     if (existing) {
       onChange(tools.map((t) => (t.name === name ? { ...t, enabled: !t.enabled } : t)));
     } else {
-      // First toggle — add entry disabled
       onChange([...tools, { name, type, enabled: false }]);
     }
   };
@@ -75,7 +83,10 @@ export function ToolManager({ tools, onChange }: ToolManagerProps) {
     <div className="space-y-5">
       {grouped.map(({ category, tools: categoryTools }) => (
         <div key={category}>
-          <h3 className="mb-2 flex items-center gap-2 font-[family-name:var(--font-display)] text-[10px] font-bold uppercase tracking-widest text-text-muted">
+          <h3
+            className="mb-2 flex items-center gap-2 border-l-2 pl-2 text-[10px] font-bold uppercase tracking-widest text-text-muted"
+            style={{ borderColor: CATEGORY_ACCENT[category as ToolCategory] }}
+          >
             <span>{CATEGORY_ICONS[category as ToolCategory]}</span>
             {category}
           </h3>
@@ -83,14 +94,17 @@ export function ToolManager({ tools, onChange }: ToolManagerProps) {
             {categoryTools.map((meta) => {
               const entry = getEntry(meta.name, TOOL_TYPES.BUILTIN);
               return (
-                <button
+                <motion.button
                   key={meta.name}
                   onClick={() => toggleTool(meta.name, TOOL_TYPES.BUILTIN)}
-                  className={`flex w-full items-center gap-3 rounded-lg border px-3 py-2 text-left transition-colors ${
-                    entry.enabled
-                      ? "border-border-active bg-elevated/60"
-                      : "border-border-subtle bg-void/30 opacity-60"
-                  }`}
+                  className="flex w-full items-center gap-3 rounded-xl border border-white/[0.06] px-3 py-2 text-left backdrop-blur-sm transition-colors"
+                  style={{
+                    background: entry.enabled ? "rgba(20, 21, 31, 0.6)" : "rgba(10, 11, 16, 0.4)",
+                    opacity: entry.enabled ? 1 : 0.6,
+                  }}
+                  whileHover={{ y: -1, boxShadow: meta.dangerous && entry.enabled ? "0 0 12px rgba(239,68,68,0.1)" : "0 4px 16px rgba(0,0,0,0.2)" }}
+                  whileTap={{ scale: 0.98 }}
+                  transition={SPRING}
                 >
                   {/* Danger icon or status dot */}
                   {meta.dangerous ? (
@@ -101,31 +115,36 @@ export function ToolManager({ tools, onChange }: ToolManagerProps) {
                         viewBox="0 0 24 24"
                         stroke="currentColor"
                         strokeWidth={1.5}
+                        style={entry.enabled ? { filter: "drop-shadow(0 0 4px rgba(249,115,22,0.4))" } : undefined}
                       >
                         <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
                       </svg>
-                      {/* Tooltip */}
-                      <span className="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-overlay px-2 py-1 text-[9px] text-severity-high opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
+                      <span className="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-lg bg-overlay px-2 py-1 text-[9px] text-severity-high opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
                         Potentially dangerous
                       </span>
                     </div>
                   ) : (
-                    <div className={`h-2 w-2 shrink-0 rounded-full ${entry.enabled ? "bg-status-live" : "bg-status-idle"}`} />
+                    <div
+                      className={`h-2 w-2 shrink-0 rounded-full ${entry.enabled ? "bg-status-live" : "bg-status-idle"}`}
+                      style={entry.enabled ? { boxShadow: "0 0 6px rgba(0,255,163,0.3)" } : undefined}
+                    />
                   )}
 
                   {/* Label */}
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-[family-name:var(--font-code)] text-xs text-text-primary">{meta.name}</span>
-                    </div>
+                    <span className="font-mono text-xs text-text-primary">{meta.name}</span>
                     <p className="text-[10px] text-text-muted">{meta.description}</p>
                   </div>
 
                   {/* Toggle */}
-                  <div className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${entry.enabled ? "bg-accent" : "bg-border-active"}`}>
-                    <div className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${entry.enabled ? "translate-x-4" : "translate-x-0.5"}`} />
+                  <div className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${entry.enabled ? "bg-accent" : "bg-white/[0.08]"}`}>
+                    <motion.div
+                      className="absolute top-0.5 h-4 w-4 rounded-full bg-white shadow"
+                      animate={{ x: entry.enabled ? 16 : 2 }}
+                      transition={SPRING}
+                    />
                   </div>
-                </button>
+                </motion.button>
               );
             })}
           </div>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import type {
   PipelineConfig,
   PipelineState,
@@ -237,56 +238,58 @@ export function Dashboard({ config }: DashboardProps) {
   return (
     <div className="noise relative flex h-screen flex-col overflow-hidden bg-void">
       {/* ── Header ──────────────────────────────────────────────────────── */}
-      <header className="relative z-10 flex h-12 shrink-0 items-center justify-between border-b border-border-subtle bg-surface/80 px-4 backdrop-blur-sm">
+      <header className="glass-panel relative z-10 flex h-14 shrink-0 items-center justify-between border-t-0 border-x-0 px-5 shadow-elevation-2">
         <div className="flex items-center gap-4">
-          <h1 className="font-[family-name:var(--font-display)] text-sm font-bold uppercase tracking-[0.15em] text-accent">
+          <h1 className="text-sm font-bold uppercase tracking-[0.15em] text-accent">
             Agentic
           </h1>
           <span className="text-xs text-text-muted">
             {currentConfig.projectPath.split(/[\\/]/).pop()}
           </span>
-          <span className="rounded border border-border-subtle bg-elevated px-2 py-0.5 font-[family-name:var(--font-code)] text-[10px] text-text-secondary">
+          <span className="rounded-full bg-accent/10 px-2.5 py-0.5 font-mono text-[10px] text-accent shadow-[0_0_12px_rgba(0,229,255,0.1)]">
             {currentConfig.model}
           </span>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-4">
           <ContextMeter
             usage={contextUsage}
             isCompacting={isCompacting}
           />
 
           <div className="flex items-center gap-2">
-            <span className="font-[family-name:var(--font-display)] text-[10px] uppercase tracking-widest text-text-muted">
+            <span className="text-[10px] uppercase tracking-widest text-text-muted">
               Cycle
             </span>
-            <span className="font-[family-name:var(--font-code)] text-sm font-bold text-text-primary">
+            <span className="font-mono text-sm font-bold text-text-primary">
               {pipelineState.currentCycle}
             </span>
           </div>
 
           <div className="flex items-center gap-1.5">
-            <span
-              className={`h-2 w-2 rounded-full ${STATUS_COLORS[pipelineState.status] ?? "bg-status-idle"} ${
-                pipelineState.status === PIPELINE_STATUSES.RUNNING
-                  ? "animate-pulse"
-                  : ""
-              }`}
-            />
-            <span className="font-[family-name:var(--font-display)] text-[10px] font-semibold uppercase tracking-widest text-text-secondary">
+            {pipelineState.status === PIPELINE_STATUSES.RUNNING ? (
+              <motion.span
+                animate={{ scale: [1, 1.4, 1], opacity: [0.7, 1, 0.7] }}
+                transition={{ repeat: Infinity, duration: 1.5, ease: "easeInOut" }}
+                className="h-2 w-2 rounded-full bg-status-live shadow-[0_0_8px_rgba(0,255,163,0.6)]"
+              />
+            ) : (
+              <span className={`h-2 w-2 rounded-full ${STATUS_COLORS[pipelineState.status] ?? "bg-status-idle"}`} />
+            )}
+            <span className="text-[10px] font-semibold uppercase tracking-widest text-text-secondary">
               {statusLabel}
             </span>
           </div>
 
           {connectionStatus !== "connected" && (
-            <span className="rounded bg-severity-critical/10 px-2 py-0.5 text-[10px] font-medium text-severity-critical">
+            <span className="rounded-full bg-severity-critical/10 px-2 py-0.5 text-[10px] font-medium text-severity-critical">
               {connectionStatus === "error" ? "DISCONNECTED" : "RECONNECTING"}
             </span>
           )}
 
           <button
             onClick={() => setSettingsOpen(true)}
-            className="rounded p-1.5 text-text-muted transition-colors hover:bg-elevated hover:text-text-primary"
+            className="rounded-lg p-1.5 text-text-muted transition-colors hover:bg-white/[0.04] hover:text-text-primary"
             aria-label="Settings"
           >
             <svg
@@ -312,7 +315,7 @@ export function Dashboard({ config }: DashboardProps) {
       </header>
 
       {/* ── Workflow Graph ──────────────────────────────────────────────── */}
-      <div className="relative z-10 shrink-0 border-b border-border-subtle">
+      <div className="relative z-10 shrink-0">
         <ErrorBoundary fallbackTitle="Workflow Graph Error">
           <WorkflowGraph
             activeAgent={pipelineState.activeAgent}
@@ -323,9 +326,9 @@ export function Dashboard({ config }: DashboardProps) {
       </div>
 
       {/* ── Main Content ───────────────────────────────────────────────── */}
-      <div className="relative z-10 flex min-h-0 flex-1">
+      <div className="relative z-10 flex min-h-0 flex-1 gap-px">
         {/* Agent Stream */}
-        <div className="flex-1 overflow-hidden border-r border-border-subtle">
+        <div className="flex-1 overflow-hidden">
           <ErrorBoundary fallbackTitle="Agent Stream Error">
             <AgentStream
               entries={streamEntries}
@@ -335,14 +338,14 @@ export function Dashboard({ config }: DashboardProps) {
         </div>
 
         {/* Sidebar */}
-        <div className="flex w-[360px] shrink-0 flex-col overflow-hidden bg-surface/50">
+        <div className="flex w-[360px] shrink-0 flex-col overflow-hidden glass-panel border-t-0 border-b-0 border-r-0">
           {/* Tab bar */}
           <div className="flex shrink-0 border-b border-border-subtle">
             {SIDEBAR_TABS.map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
-                className={`flex-1 py-2 text-center font-[family-name:var(--font-display)] text-[10px] uppercase tracking-widest transition-colors ${
+                className={`flex-1 py-2.5 text-center text-[10px] uppercase tracking-widest transition-colors ${
                   activeTab === tab
                     ? "border-b-2 border-accent text-accent"
                     : "text-text-muted hover:text-text-secondary"
@@ -350,7 +353,7 @@ export function Dashboard({ config }: DashboardProps) {
               >
                 {TAB_LABELS[tab]}
                 {tab === "tasks" && tasks.length > 0 && (
-                  <span className="ml-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-accent/10 px-1 font-[family-name:var(--font-code)] text-[9px] text-accent">
+                  <span className="ml-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-accent/10 px-1 font-mono text-[9px] text-accent">
                     {tasks.length}
                   </span>
                 )}
@@ -387,23 +390,27 @@ export function Dashboard({ config }: DashboardProps) {
       </div>
 
       {/* ── Modals ─────────────────────────────────────────────────────── */}
-      {selectedTask && (
-        <TaskDetail
-          task={selectedTask}
-          onClose={() => setSelectedTask(null)}
-        />
-      )}
+      <AnimatePresence>
+        {selectedTask && (
+          <TaskDetail
+            task={selectedTask}
+            onClose={() => setSelectedTask(null)}
+          />
+        )}
+      </AnimatePresence>
 
-      {settingsOpen && (
-        <SettingsPanel
-          config={currentConfig}
-          onClose={() => setSettingsOpen(false)}
-          onSave={(updated: PipelineConfig) => {
-            setCurrentConfig(updated);
-            setSettingsOpen(false);
-          }}
-        />
-      )}
+      <AnimatePresence>
+        {settingsOpen && (
+          <SettingsPanel
+            config={currentConfig}
+            onClose={() => setSettingsOpen(false)}
+            onSave={(updated: PipelineConfig) => {
+              setCurrentConfig(updated);
+              setSettingsOpen(false);
+            }}
+          />
+        )}
+      </AnimatePresence>
 
       {/* ── Celebrations ───────────────────────────────────────────────── */}
       <CelebrationEffects

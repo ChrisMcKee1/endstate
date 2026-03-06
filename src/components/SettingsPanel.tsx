@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import type { PipelineConfig, Severity } from "@/lib/types";
 import { SEVERITIES } from "@/lib/types";
 import { ModelSelector } from "@/components/ModelSelector";
@@ -13,6 +14,22 @@ const SEVERITY_OPTIONS: Severity[] = [
   SEVERITIES.LOW,
 ];
 
+const SEVERITY_FILL: Record<Severity, string> = {
+  [SEVERITIES.CRITICAL]: "bg-severity-critical text-white",
+  [SEVERITIES.HIGH]: "bg-severity-high text-white",
+  [SEVERITIES.MEDIUM]: "bg-severity-medium text-void",
+  [SEVERITIES.LOW]: "bg-severity-low text-white",
+};
+
+const SPRING = { type: "spring" as const, stiffness: 400, damping: 28 };
+
+const TABS = ["settings", "customizations"] as const;
+type TabView = (typeof TABS)[number];
+const TAB_LABELS: Record<TabView, string> = {
+  settings: "Pipeline",
+  customizations: "Customizations",
+};
+
 interface SettingsPanelProps {
   config: PipelineConfig;
   onClose: () => void;
@@ -23,9 +40,26 @@ export function SettingsPanel({ config, onClose, onSave }: SettingsPanelProps) {
   const [draft, setDraft] = useState<PipelineConfig>({ ...config });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [view, setView] = useState<"settings" | "customizations">("settings");
+  const [view, setView] = useState<TabView>("settings");
+  const tabRefs = useRef<Record<TabView, HTMLButtonElement | null>>({ settings: null, customizations: null });
+  const [indicatorStyle, setIndicatorStyle] = useState({ left: 0, width: 0 });
 
-  // Close on Escape
+  // Update tab indicator position
+  useEffect(() => {
+    const el = tabRefs.current[view];
+    if (el) {
+      const parent = el.parentElement;
+      if (parent) {
+        const parentRect = parent.getBoundingClientRect();
+        const elRect = el.getBoundingClientRect();
+        setIndicatorStyle({
+          left: elRect.left - parentRect.left,
+          width: elRect.width,
+        });
+      }
+    }
+  }, [view]);
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
@@ -67,207 +101,225 @@ export function SettingsPanel({ config, onClose, onSave }: SettingsPanelProps) {
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex justify-end bg-black/40 backdrop-blur-sm"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-    >
-      <div className="flex h-full w-[400px] max-w-full flex-col border-l border-border-subtle bg-surface shadow-2xl animate-slide-in-right">
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-border-subtle px-4 py-3">
-          <h2 className="font-[family-name:var(--font-display)] text-sm font-bold uppercase tracking-wider text-text-primary">
-            Settings
-          </h2>
-          <button
-            onClick={onClose}
-            className="rounded p-1 text-text-muted transition-colors hover:bg-elevated hover:text-text-primary"
-          >
-            <svg
-              className="h-5 w-5"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={1.5}
+    <AnimatePresence>
+      {/* Overlay */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.2 }}
+        className="fixed inset-0 z-50 flex justify-end bg-black/40 backdrop-blur-sm"
+        onClick={(e) => {
+          if (e.target === e.currentTarget) onClose();
+        }}
+      >
+        {/* Panel */}
+        <motion.div
+          initial={{ x: "100%" }}
+          animate={{ x: 0 }}
+          exit={{ x: "100%" }}
+          transition={{ type: "spring", stiffness: 350, damping: 30 }}
+          className="glass-panel flex h-full w-[400px] max-w-full flex-col rounded-l-2xl border-l border-border-subtle"
+        >
+          {/* Header */}
+          <div className="flex items-center justify-between border-b border-border-subtle px-4 py-3">
+            <h2 className="text-sm font-bold uppercase tracking-wider text-text-primary">
+              Settings
+            </h2>
+            <motion.button
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.9 }}
+              transition={SPRING}
+              onClick={onClose}
+              className="rounded-lg p-1.5 text-text-muted transition-colors hover:bg-elevated hover:text-text-primary"
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M6 18L18 6M6 6l12 12"
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </motion.button>
+          </div>
+
+          {/* Tab bar with animated underline */}
+          <div className="relative flex shrink-0 border-b border-border-subtle">
+            {TABS.map((tab) => (
+              <button
+                key={tab}
+                ref={(el) => { tabRefs.current[tab] = el; }}
+                onClick={() => setView(tab)}
+                className={`flex-1 py-2.5 text-center text-[10px] uppercase tracking-widest transition-colors ${
+                  view === tab ? "text-accent" : "text-text-muted hover:text-text-secondary"
+                }`}
+              >
+                {TAB_LABELS[tab]}
+              </button>
+            ))}
+            <motion.div
+              className="absolute bottom-0 h-0.5 bg-accent"
+              animate={{ left: indicatorStyle.left, width: indicatorStyle.width }}
+              transition={{ type: "spring", stiffness: 400, damping: 30 }}
+            />
+          </div>
+
+          {/* Content */}
+          {view === "customizations" ? (
+            <CustomizationPanel
+              skills={draft.skills}
+              customAgents={draft.customAgentDefinitions}
+              mcpServers={draft.mcpServerOverrides}
+              toolOverrides={draft.toolOverrides}
+              onSkillsChange={(v) => update("skills", v)}
+              onCustomAgentsChange={(v) => update("customAgentDefinitions", v)}
+              onMcpServersChange={(v) => update("mcpServerOverrides", v)}
+              onToolOverridesChange={(v) => update("toolOverrides", v)}
+              onSave={handleSave}
+              saving={saving}
+              projectPath={draft.projectPath}
+            />
+          ) : (
+          <>
+          <div className="flex-1 overflow-y-auto p-4 space-y-5">
+            {/* Model section */}
+            <div className="glass-panel rounded-xl p-4">
+              <label className="mb-2 block text-[10px] uppercase tracking-widest text-text-muted">
+                Model
+              </label>
+              <ModelSelector
+                value={draft.model}
+                onChange={(v) => update("model", v)}
               />
-            </svg>
-          </button>
-        </div>
+            </div>
 
-        {/* View toggle */}
-        <div className="flex shrink-0 border-b border-border-subtle">
-          <button
-            onClick={() => setView("settings")}
-            className={`flex-1 py-2 text-center font-[family-name:var(--font-display)] text-[10px] uppercase tracking-widest transition-colors ${
-              view === "settings"
-                ? "border-b-2 border-accent text-accent"
-                : "text-text-muted hover:text-text-secondary"
-            }`}
-          >
-            Pipeline
-          </button>
-          <button
-            onClick={() => setView("customizations")}
-            className={`flex-1 py-2 text-center font-[family-name:var(--font-display)] text-[10px] uppercase tracking-widest transition-colors ${
-              view === "customizations"
-                ? "border-b-2 border-accent text-accent"
-                : "text-text-muted hover:text-text-secondary"
-            }`}
-          >
-            Customizations
-          </button>
-        </div>
+            {/* Max cycles section */}
+            <div className="glass-panel rounded-xl p-4">
+              <label className="mb-2 flex items-center justify-between text-[10px] uppercase tracking-widest text-text-muted">
+                <span>Max Cycles</span>
+                <span className="font-mono text-xs text-text-primary">
+                  {draft.maxCycles}
+                </span>
+              </label>
+              <input
+                type="range"
+                min={1}
+                max={50}
+                value={draft.maxCycles}
+                onChange={(e) => update("maxCycles", parseInt(e.target.value, 10))}
+                className="w-full accent-accent"
+              />
+            </div>
 
-        {/* Content */}
-        {view === "customizations" ? (
-          <CustomizationPanel
-            skills={draft.skills}
-            customAgents={draft.customAgentDefinitions}
-            mcpServers={draft.mcpServerOverrides}
-            toolOverrides={draft.toolOverrides}
-            onSkillsChange={(v) => update("skills", v)}
-            onCustomAgentsChange={(v) => update("customAgentDefinitions", v)}
-            onMcpServersChange={(v) => update("mcpServerOverrides", v)}
-            onToolOverridesChange={(v) => update("toolOverrides", v)}
-            onSave={handleSave}
-            saving={saving}
-            projectPath={draft.projectPath}
-          />
-        ) : (
-        <>
-        {/* Pipeline settings content */}
-        <div className="flex-1 overflow-y-auto p-4">
-          {/* Model */}
-          <div className="mb-5">
-            <label className="mb-1.5 block font-[family-name:var(--font-display)] text-[10px] uppercase tracking-widest text-text-muted">
-              Model
-            </label>
-            <ModelSelector
-              value={draft.model}
-              onChange={(v) => update("model", v)}
-            />
+            {/* Fix severity threshold */}
+            <div className="glass-panel rounded-xl p-4">
+              <label className="mb-2 block text-[10px] uppercase tracking-widest text-text-muted">
+                Fix Severity Threshold
+              </label>
+              <div className="flex gap-1.5">
+                {SEVERITY_OPTIONS.map((sev) => (
+                  <motion.button
+                    key={sev}
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    transition={SPRING}
+                    onClick={() => update("fixSeverity", sev)}
+                    className={`flex-1 rounded-full py-1.5 text-[10px] font-bold transition-colors ${
+                      draft.fixSeverity === sev
+                        ? SEVERITY_FILL[sev]
+                        : "border border-border-subtle bg-void/50 text-text-muted hover:text-text-secondary"
+                    }`}
+                  >
+                    {sev}
+                  </motion.button>
+                ))}
+              </div>
+            </div>
+
+            {/* Agent toggles */}
+            <div className="glass-panel rounded-xl p-4">
+              <label className="mb-3 block text-[10px] uppercase tracking-widest text-text-muted">
+                Agents
+              </label>
+              <div className="space-y-2">
+                <ToggleRow
+                  label="Explorer"
+                  description="Navigate and test the running app"
+                  checked={draft.enableExplorer}
+                  onChange={(v) => update("enableExplorer", v)}
+                  color="bg-agent-explorer"
+                  glowColor="rgba(0,229,255,0.3)"
+                />
+                <ToggleRow
+                  label="Analyst"
+                  description="Cross-reference findings with code"
+                  checked={draft.enableAnalyst}
+                  onChange={(v) => update("enableAnalyst", v)}
+                  color="bg-agent-analyst"
+                  glowColor="rgba(176,38,255,0.3)"
+                />
+                <ToggleRow
+                  label="Fixer"
+                  description="Apply fixes and verify builds"
+                  checked={draft.enableFixer}
+                  onChange={(v) => update("enableFixer", v)}
+                  color="bg-agent-fixer"
+                  glowColor="rgba(0,255,163,0.3)"
+                />
+                <ToggleRow
+                  label="UX Reviewer"
+                  description="Evaluate from user perspective"
+                  checked={draft.enableUxReviewer}
+                  onChange={(v) => update("enableUxReviewer", v)}
+                  color="bg-agent-ux"
+                  glowColor="rgba(255,184,0,0.3)"
+                />
+              </div>
+            </div>
+
+            {/* Auto-approve & Infinite sessions */}
+            <div className="glass-panel rounded-xl p-4 space-y-2">
+              <ToggleRow
+                label="Auto-approve"
+                description="Approve all agent actions without prompting"
+                checked={draft.autoApprove}
+                onChange={(v) => update("autoApprove", v)}
+              />
+              <ToggleRow
+                label="Infinite sessions"
+                description="Enable context compaction for long runs"
+                checked={draft.infiniteSessions}
+                onChange={(v) => update("infiniteSessions", v)}
+              />
+            </div>
           </div>
 
-          {/* Max cycles */}
-          <div className="mb-5">
-            <label className="mb-1.5 flex items-center justify-between font-[family-name:var(--font-display)] text-[10px] uppercase tracking-widest text-text-muted">
-              <span>Max Cycles</span>
-              <span className="font-[family-name:var(--font-code)] text-xs text-text-primary">
-                {draft.maxCycles}
-              </span>
-            </label>
-            <input
-              type="range"
-              min={1}
-              max={50}
-              value={draft.maxCycles}
-              onChange={(e) => update("maxCycles", parseInt(e.target.value, 10))}
-              className="w-full accent-accent"
-            />
-          </div>
-
-          {/* Fix severity threshold */}
-          <div className="mb-5">
-            <label className="mb-1.5 block font-[family-name:var(--font-display)] text-[10px] uppercase tracking-widest text-text-muted">
-              Fix Severity Threshold
-            </label>
-            <div className="flex gap-1.5">
-              {SEVERITY_OPTIONS.map((sev) => (
-                <button
-                  key={sev}
-                  onClick={() => update("fixSeverity", sev)}
-                  className={`flex-1 rounded border py-1.5 text-[10px] font-bold transition-colors ${
-                    draft.fixSeverity === sev
-                      ? "border-accent bg-accent/10 text-accent"
-                      : "border-border-subtle bg-void/50 text-text-muted hover:text-text-secondary"
-                  }`}
+          {/* Footer */}
+          <div className="border-t border-border-subtle p-4">
+            <AnimatePresence>
+              {error && (
+                <motion.p
+                  initial={{ opacity: 0, y: -4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0 }}
+                  className="mb-2 text-xs text-severity-critical"
                 >
-                  {sev}
-                </button>
-              ))}
-            </div>
+                  {error}
+                </motion.p>
+              )}
+            </AnimatePresence>
+            <motion.button
+              whileHover={{ scale: 1.02, boxShadow: "0 0 20px rgba(0,255,163,0.2)" }}
+              whileTap={{ scale: 0.98 }}
+              transition={SPRING}
+              onClick={handleSave}
+              disabled={saving}
+              className="w-full rounded-xl bg-status-live py-2.5 text-xs font-bold uppercase tracking-wider text-void transition-opacity hover:opacity-90 disabled:opacity-50"
+            >
+              {saving ? "Saving…" : "Save Settings"}
+            </motion.button>
           </div>
-
-          {/* Agent toggles */}
-          <div className="mb-5">
-            <label className="mb-2 block font-[family-name:var(--font-display)] text-[10px] uppercase tracking-widest text-text-muted">
-              Agents
-            </label>
-            <div className="space-y-2">
-              <ToggleRow
-                label="Explorer"
-                description="Navigate and test the running app"
-                checked={draft.enableExplorer}
-                onChange={(v) => update("enableExplorer", v)}
-                color="bg-agent-explorer"
-              />
-              <ToggleRow
-                label="Analyst"
-                description="Cross-reference findings with code"
-                checked={draft.enableAnalyst}
-                onChange={(v) => update("enableAnalyst", v)}
-                color="bg-agent-analyst"
-              />
-              <ToggleRow
-                label="Fixer"
-                description="Apply fixes and verify builds"
-                checked={draft.enableFixer}
-                onChange={(v) => update("enableFixer", v)}
-                color="bg-agent-fixer"
-              />
-              <ToggleRow
-                label="UX Reviewer"
-                description="Evaluate from user perspective"
-                checked={draft.enableUxReviewer}
-                onChange={(v) => update("enableUxReviewer", v)}
-                color="bg-agent-ux"
-              />
-            </div>
-          </div>
-
-          {/* Auto-approve */}
-          <div className="mb-5">
-            <ToggleRow
-              label="Auto-approve"
-              description="Approve all agent actions without prompting"
-              checked={draft.autoApprove}
-              onChange={(v) => update("autoApprove", v)}
-            />
-          </div>
-
-          {/* Infinite sessions */}
-          <div className="mb-5">
-            <ToggleRow
-              label="Infinite sessions"
-              description="Enable context compaction for long runs"
-              checked={draft.infiniteSessions}
-              onChange={(v) => update("infiniteSessions", v)}
-            />
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div className="border-t border-border-subtle p-4">
-          {error && (
-            <p className="mb-2 text-xs text-severity-critical">{error}</p>
+          </>
           )}
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="w-full rounded-lg bg-accent py-2.5 font-[family-name:var(--font-display)] text-xs font-bold uppercase tracking-wider text-void transition-opacity hover:opacity-90 disabled:opacity-50"
-          >
-            {saving ? "Saving…" : "Save Settings"}
-          </button>
-        </div>
-        </>
-        )}
-      </div>
-    </div>
+        </motion.div>
+      </motion.div>
+    </AnimatePresence>
   );
 }
 
@@ -279,34 +331,51 @@ function ToggleRow({
   checked,
   onChange,
   color,
+  glowColor,
 }: {
   label: string;
   description: string;
   checked: boolean;
   onChange: (val: boolean) => void;
   color?: string;
+  glowColor?: string;
 }) {
   return (
-    <button
+    <motion.button
+      whileTap={{ scale: 0.98 }}
+      transition={SPRING}
       onClick={() => onChange(!checked)}
-      className="flex w-full items-center gap-3 rounded-lg border border-border-subtle bg-void/30 px-3 py-2 text-left transition-colors hover:bg-elevated"
+      className="flex w-full items-center gap-3 rounded-xl border border-border-subtle bg-void/30 px-3 py-2.5 text-left transition-colors hover:bg-elevated"
+      style={checked && glowColor ? { boxShadow: `inset 3px 0 0 ${glowColor}` } : undefined}
     >
       {color && (
-        <div className={`h-2 w-2 rounded-full ${color}`} />
+        <motion.div
+          animate={{
+            opacity: checked ? 1 : 0.3,
+            scale: checked ? 1 : 0.8,
+          }}
+          transition={SPRING}
+          className={`h-2.5 w-2.5 rounded-full ${color}`}
+          style={checked && glowColor ? { boxShadow: `0 0 8px ${glowColor}` } : undefined}
+        />
       )}
       <div className="flex-1">
         <p className="text-xs font-medium text-text-primary">{label}</p>
         <p className="text-[10px] text-text-muted">{description}</p>
       </div>
-      <div
-        className={`relative h-5 w-9 rounded-full transition-colors ${checked ? "bg-accent" : "bg-border-active"}`}
+      <motion.div
+        className="relative h-5 w-9 rounded-full"
+        animate={{
+          backgroundColor: checked ? "rgb(0, 229, 255)" : "rgba(255,255,255,0.08)",
+        }}
+        transition={SPRING}
       >
-        <div
-          className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${
-            checked ? "translate-x-4" : "translate-x-0.5"
-          }`}
+        <motion.div
+          className="absolute top-0.5 h-4 w-4 rounded-full bg-white shadow"
+          animate={{ x: checked ? 16 : 2 }}
+          transition={{ type: "spring", stiffness: 500, damping: 25 }}
         />
-      </div>
-    </button>
+      </motion.div>
+    </motion.button>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, type FormEvent } from "react";
+import { motion } from "framer-motion";
 import type { PipelineStatus } from "@/lib/types";
 import { PIPELINE_STATUSES } from "@/lib/types";
 
@@ -55,25 +56,27 @@ export function SteeringBar({ status }: SteeringBarProps) {
   };
 
   return (
-    <div className="border-t border-border-subtle bg-surface/80 backdrop-blur-sm">
+    <div className="glass-panel border-t-0 shadow-[0_-4px_24px_rgba(0,0,0,0.4)]">
       {/* Quick chips */}
-      <div className="flex gap-1.5 overflow-x-auto px-4 pt-2 pb-1.5">
+      <div className="flex gap-2 overflow-x-auto px-4 pt-3 pb-2">
         {QUICK_CHIPS.map((chip) => (
-          <button
+          <motion.button
             key={chip.label}
+            whileHover={{ scale: 1.04, boxShadow: "0 0 12px rgba(0, 229, 255, 0.15)" }}
+            whileTap={{ scale: 0.96 }}
             onClick={() => send(chip.message)}
             disabled={sending || !isRunning}
-            className="shrink-0 rounded-full border border-border-subtle bg-elevated px-3 py-1 text-[10px] text-text-muted transition-all hover:border-accent/30 hover:text-accent disabled:opacity-40"
+            className="shrink-0 rounded-full border border-border-active bg-white/[0.03] px-3.5 py-1.5 text-[11px] font-medium text-text-secondary transition-colors hover:border-accent/30 hover:text-accent disabled:opacity-30"
           >
             {chip.label}
-          </button>
+          </motion.button>
         ))}
       </div>
 
       {/* Input row */}
       <form
         onSubmit={handleSubmit}
-        className="flex items-center gap-2 px-4 pb-3"
+        className="flex items-center gap-3 px-4 pb-3"
       >
         <div className="relative flex-1">
           <input
@@ -86,7 +89,7 @@ export function SteeringBar({ status }: SteeringBarProps) {
                 : "Pipeline is not running"
             }
             disabled={!isRunning || sending}
-            className="w-full rounded-lg border border-border-subtle bg-void/50 px-4 py-2.5 font-[family-name:var(--font-code)] text-sm text-text-primary placeholder:text-text-muted/40 focus:border-accent/50 focus:outline-none focus:ring-1 focus:ring-accent/20 disabled:opacity-40"
+            className="w-full rounded-full border border-border-active bg-void/60 px-5 py-3 font-mono text-sm text-text-primary placeholder:text-text-muted/40 transition-shadow focus:border-accent/40 focus:shadow-[inset_0_0_20px_rgba(0,229,255,0.06),0_0_16px_rgba(0,229,255,0.08)] focus:outline-none disabled:opacity-30"
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
@@ -95,19 +98,30 @@ export function SteeringBar({ status }: SteeringBarProps) {
             }}
           />
           {lastSent && (
-            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-status-live animate-fade-in">
+            <motion.span
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="absolute right-5 top-1/2 -translate-y-1/2 text-[10px] font-medium text-status-live"
+            >
               Sent ✓
-            </span>
+            </motion.span>
           )}
         </div>
 
-        <button
+        <motion.button
           type="submit"
           disabled={!message.trim() || sending || !isRunning}
-          className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent/10 text-accent transition-all hover:bg-accent/20 disabled:opacity-30"
+          whileHover={{ scale: 1.08, boxShadow: "0 0 20px rgba(0, 229, 255, 0.4)" }}
+          whileTap={{ scale: 0.92 }}
+          transition={{ type: "spring", stiffness: 400, damping: 17 }}
+          className="flex h-11 w-11 items-center justify-center rounded-full bg-accent/15 text-accent transition-colors hover:bg-accent/25 disabled:opacity-20"
         >
           {sending ? (
-            <div className="h-4 w-4 animate-spin rounded-full border-2 border-transparent border-t-accent" />
+            <motion.div
+              animate={{ rotate: 360 }}
+              transition={{ repeat: Infinity, duration: 0.8, ease: "linear" }}
+              className="h-4 w-4 rounded-full border-2 border-transparent border-t-accent"
+            />
           ) : (
             <svg
               className="h-4 w-4"
@@ -123,7 +137,7 @@ export function SteeringBar({ status }: SteeringBarProps) {
               />
             </svg>
           )}
-        </button>
+        </motion.button>
       </form>
     </div>
   );

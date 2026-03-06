@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import { motion } from "framer-motion";
 
 // ─── Diff parsing ────────────────────────────────────────────────────────────
 
@@ -19,9 +20,7 @@ function parseDiff(diff: string): { filePath: string; lines: DiffLine[] } {
   let newLine = 0;
 
   for (const raw of rawLines) {
-    if (raw.startsWith("diff --git") || raw.startsWith("index ")) {
-      continue;
-    }
+    if (raw.startsWith("diff --git") || raw.startsWith("index ")) continue;
 
     if (raw.startsWith("--- ")) {
       filePath = raw.slice(4).replace(/^a\//, "");
@@ -44,19 +43,9 @@ function parseDiff(diff: string): { filePath: string; lines: DiffLine[] } {
     }
 
     if (raw.startsWith("+")) {
-      lines.push({
-        type: "add",
-        content: raw.slice(1),
-        oldNum: null,
-        newNum: newLine++,
-      });
+      lines.push({ type: "add", content: raw.slice(1), oldNum: null, newNum: newLine++ });
     } else if (raw.startsWith("-")) {
-      lines.push({
-        type: "remove",
-        content: raw.slice(1),
-        oldNum: oldLine++,
-        newNum: null,
-      });
+      lines.push({ type: "remove", content: raw.slice(1), oldNum: oldLine++, newNum: null });
     } else {
       lines.push({
         type: "context",
@@ -72,11 +61,18 @@ function parseDiff(diff: string): { filePath: string; lines: DiffLine[] } {
 
 // ─── Line style map ─────────────────────────────────────────────────────────
 
-const LINE_STYLES: Record<DiffLine["type"], string> = {
-  add: "bg-status-live/8 text-status-live",
-  remove: "bg-severity-critical/8 text-severity-critical",
+const LINE_STYLES: Record<DiffLine["type"], { row: string; border: string }> = {
+  add: { row: "bg-[#00FFA3]/[0.08]", border: "border-l-2 border-l-[#00FFA3]/60" },
+  remove: { row: "bg-[#EF4444]/[0.08]", border: "border-l-2 border-l-[#EF4444]/60" },
+  context: { row: "", border: "border-l-2 border-l-transparent" },
+  header: { row: "bg-[#B026FF]/[0.05]", border: "border-l-2 border-l-[#B026FF]/30" },
+};
+
+const LINE_TEXT_COLOR: Record<DiffLine["type"], string> = {
+  add: "text-status-live",
+  remove: "text-severity-critical",
   context: "text-text-secondary",
-  header: "bg-accent/5 text-accent font-semibold",
+  header: "text-agent-analyst font-semibold",
 };
 
 const LINE_PREFIX: Record<DiffLine["type"], string> = {
@@ -85,6 +81,8 @@ const LINE_PREFIX: Record<DiffLine["type"], string> = {
   context: " ",
   header: "",
 };
+
+const SPRING = { type: "spring" as const, stiffness: 300, damping: 30 };
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
@@ -97,19 +95,27 @@ export function FileDiffPreview({ diff }: FileDiffPreviewProps) {
 
   if (lines.length === 0) {
     return (
-      <div className="rounded border border-border-subtle bg-void/50 p-3 text-xs text-text-muted">
+      <div className="rounded-xl border border-white/[0.04] bg-white/[0.02] p-3 text-xs text-text-muted backdrop-blur-sm">
         No diff data
       </div>
     );
   }
 
   return (
-    <div className="overflow-hidden rounded-lg border border-border-subtle">
+    <motion.div
+      className="overflow-hidden rounded-xl border border-white/[0.06] shadow-[0_8px_32px_rgba(0,0,0,0.3)] backdrop-blur-sm"
+      style={{ background: "rgba(20, 21, 31, 0.5)" }}
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={SPRING}
+    >
       {/* File header */}
       {filePath && (
-        <div className="flex items-center gap-2 border-b border-border-subtle bg-elevated px-3 py-1.5">
+        <div className="flex items-center gap-2 border-b border-white/[0.04] px-3 py-2"
+          style={{ background: "rgba(255,255,255,0.02)" }}
+        >
           <svg
-            className="h-3 w-3 text-text-muted"
+            className="h-3.5 w-3.5 text-text-muted"
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"
@@ -121,28 +127,31 @@ export function FileDiffPreview({ diff }: FileDiffPreviewProps) {
               d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"
             />
           </svg>
-          <span className="font-[family-name:var(--font-code)] text-[11px] text-text-secondary">
+          <span className="font-mono text-[11px] text-text-secondary">
             {filePath}
           </span>
         </div>
       )}
 
       {/* Diff lines */}
-      <div className="max-h-80 overflow-auto bg-void/30">
-        <table className="w-full border-collapse font-[family-name:var(--font-code)] text-[11px] leading-5">
+      <div className="max-h-80 overflow-auto">
+        <table className="w-full border-collapse font-mono text-[11px] leading-5">
           <tbody>
             {lines.map((line, i) => (
-              <tr key={i} className={`${LINE_STYLES[line.type]} border-b border-border-subtle/20`}>
+              <tr
+                key={i}
+                className={`${LINE_STYLES[line.type].row} ${LINE_STYLES[line.type].border} ${LINE_TEXT_COLOR[line.type]}`}
+              >
                 {/* Old line number */}
-                <td className="w-10 select-none px-2 text-right text-text-muted/30">
+                <td className="w-10 select-none px-2 text-right font-mono text-text-muted/20">
                   {line.oldNum ?? ""}
                 </td>
                 {/* New line number */}
-                <td className="w-10 select-none px-2 text-right text-text-muted/30">
+                <td className="w-10 select-none px-2 text-right font-mono text-text-muted/20">
                   {line.newNum ?? ""}
                 </td>
                 {/* Prefix */}
-                <td className="w-4 select-none text-center">
+                <td className="w-4 select-none text-center opacity-50">
                   {LINE_PREFIX[line.type]}
                 </td>
                 {/* Content */}
@@ -154,6 +163,6 @@ export function FileDiffPreview({ diff }: FileDiffPreviewProps) {
           </tbody>
         </table>
       </div>
-    </div>
+    </motion.div>
   );
 }

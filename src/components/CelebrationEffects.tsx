@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useReducer } from "react";
+import { useEffect, useRef, useReducer, useCallback } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import confetti from "canvas-confetti";
 import type { Task, PipelineState, SSEEvent } from "@/lib/types";
 import {
@@ -10,19 +11,25 @@ import {
   SESSION_EVENT_TYPES,
 } from "@/lib/types";
 
+// ─── Brand palette for confetti ──────────────────────────────────────────────
+
+const CONFETTI_COLORS = ["#00E5FF", "#00FFA3", "#B026FF", "#FFB800"];
+
 // ─── Achievement definitions ─────────────────────────────────────────────────
 
 const ACHIEVEMENTS = {
-  FIRST_FIX: { id: "first-fix", label: "First Fix", icon: "🔧", description: "First task resolved" },
-  CLEAN_SWEEP: { id: "clean-sweep", label: "Clean Sweep", icon: "🧹", description: "All tasks resolved" },
-  UX_CHAMPION: { id: "ux-champion", label: "UX Champion", icon: "✨", description: "UX score above 7/10" },
-  ZERO_BUGS: { id: "zero-bugs", label: "Zero Bugs", icon: "🐛", description: "No open critical tasks" },
-  CONVERGED: { id: "converged", label: "Converged", icon: "🎯", description: "Pipeline reached convergence" },
+  FIRST_FIX: { id: "first-fix", label: "First Fix", icon: "🔧", description: "First task resolved", glow: "#00FFA3" },
+  CLEAN_SWEEP: { id: "clean-sweep", label: "Clean Sweep", icon: "🧹", description: "All tasks resolved", glow: "#00E5FF" },
+  UX_CHAMPION: { id: "ux-champion", label: "UX Champion", icon: "✨", description: "UX score above 7/10", glow: "#FFB800" },
+  ZERO_BUGS: { id: "zero-bugs", label: "Zero Bugs", icon: "🐛", description: "No open critical tasks", glow: "#B026FF" },
+  CONVERGED: { id: "converged", label: "Converged", icon: "🎯", description: "Pipeline reached convergence", glow: "#00E5FF" },
 } as const;
 
 const ALL_ACHIEVEMENTS = Object.values(ACHIEVEMENTS);
 
-// ─── Reducer for celebration state ───────────────────────────────────────────
+const SPRING = { type: "spring" as const, stiffness: 300, damping: 24 };
+
+// ─── Reducer ─────────────────────────────────────────────────────────────────
 
 interface CelebrationState {
   badges: string[];
@@ -34,10 +41,7 @@ type CelebrationAction =
   | { type: "SHOW_BANNER"; text: string }
   | { type: "HIDE_BANNER" };
 
-function celebrationReducer(
-  state: CelebrationState,
-  action: CelebrationAction,
-): CelebrationState {
+function celebrationReducer(state: CelebrationState, action: CelebrationAction): CelebrationState {
   switch (action.type) {
     case "ADD_BADGE":
       if (state.badges.includes(action.id)) return state;
@@ -58,30 +62,31 @@ interface CelebrationEffectsProps {
   events: SSEEvent[];
 }
 
-export function CelebrationEffects({
-  tasks,
-  events,
-}: CelebrationEffectsProps) {
-  const [state, dispatch] = useReducer(celebrationReducer, {
-    badges: [],
-    banner: null,
-  });
+export function CelebrationEffects({ tasks, events }: CelebrationEffectsProps) {
+  const [state, dispatch] = useReducer(celebrationReducer, { badges: [], banner: null });
 
   const earned = useRef<Set<string>>(new Set());
   const prevResolvedCount = useRef(0);
   const prevEventsLen = useRef(0);
   const bannerTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // ── Fire confetti + track milestones (external side effects only) ─────
+  const awardAchievement = useCallback((id: string): boolean => {
+    if (earned.current.has(id)) return false;
+    earned.current.add(id);
+    dispatch({ type: "ADD_BADGE", id });
+    const ach = ALL_ACHIEVEMENTS.find((a) => a.id === id);
+    if (ach) {
+      dispatch({ type: "SHOW_BANNER", text: ach.description });
+      if (bannerTimer.current) clearTimeout(bannerTimer.current);
+      bannerTimer.current = setTimeout(() => dispatch({ type: "HIDE_BANNER" }), 4000);
+    }
+    return true;
+  }, []);
 
   useEffect(() => {
-    const resolvedCount = tasks.filter(
-      (t) => t.status === TASK_STATUSES.RESOLVED,
-    ).length;
+    const resolvedCount = tasks.filter((t) => t.status === TASK_STATUSES.RESOLVED).length;
     const openCount = tasks.filter(
-      (t) =>
-        t.status === TASK_STATUSES.OPEN ||
-        t.status === TASK_STATUSES.IN_PROGRESS,
+      (t) => t.status === TASK_STATUSES.OPEN || t.status === TASK_STATUSES.IN_PROGRESS,
     ).length;
     const criticalOpen = tasks.filter(
       (t) =>
@@ -90,56 +95,35 @@ export function CelebrationEffects({
         t.status !== TASK_STATUSES.WONT_FIX,
     ).length;
 
-    // First task resolved
-    if (
-      resolvedCount > 0 &&
-      prevResolvedCount.current === 0 &&
-      !earned.current.has(ACHIEVEMENTS.FIRST_FIX.id)
-    ) {
-      earned.current.add(ACHIEVEMENTS.FIRST_FIX.id);
-      confetti({
-        particleCount: 50,
-        spread: 60,
-        origin: { y: 0.7 },
-        colors: ["#00CFFF", "#34D399", "#A78BFA"],
-      });
+    if (resolvedCount > 0 && prevResolvedCount.current === 0) {
+      if (awardAchievement(ACHIEVEMENTS.FIRST_FIX.id)) {
+        confetti({ particleCount: 50, spread: 60, origin: { y: 0.7 }, colors: CONFETTI_COLORS });
+      }
     }
 
-    // All critical resolved
     if (
       criticalOpen === 0 &&
-      tasks.some((t) => t.severity === SEVERITIES.CRITICAL) &&
-      !earned.current.has(ACHIEVEMENTS.ZERO_BUGS.id)
+      tasks.some((t) => t.severity === SEVERITIES.CRITICAL)
     ) {
-      earned.current.add(ACHIEVEMENTS.ZERO_BUGS.id);
-      confetti({
-        particleCount: 150,
-        spread: 100,
-        origin: { y: 0.5 },
-        colors: ["#EF4444", "#22C55E", "#FBBF24", "#00CFFF"],
-      });
+      if (awardAchievement(ACHIEVEMENTS.ZERO_BUGS.id)) {
+        confetti({ particleCount: 150, spread: 100, origin: { y: 0.5 }, colors: CONFETTI_COLORS });
+      }
     }
 
-    // Zero open tasks
-    if (
-      tasks.length > 0 &&
-      openCount === 0 &&
-      !earned.current.has(ACHIEVEMENTS.CLEAN_SWEEP.id)
-    ) {
-      earned.current.add(ACHIEVEMENTS.CLEAN_SWEEP.id);
-      confetti({
-        particleCount: 300,
-        spread: 160,
-        origin: { y: 0.4 },
-        startVelocity: 45,
-        colors: ["#00CFFF", "#34D399", "#A78BFA", "#FBBF24", "#22C55E"],
-      });
+    if (tasks.length > 0 && openCount === 0) {
+      if (awardAchievement(ACHIEVEMENTS.CLEAN_SWEEP.id)) {
+        confetti({
+          particleCount: 300,
+          spread: 160,
+          origin: { y: 0.4 },
+          startVelocity: 45,
+          colors: CONFETTI_COLORS,
+        });
+      }
     }
 
     prevResolvedCount.current = resolvedCount;
-  }, [tasks]);
-
-  // ── Check SSE events for convergence ──────────────────────────────────
+  }, [tasks, awardAchievement]);
 
   useEffect(() => {
     if (events.length <= prevEventsLen.current) return;
@@ -149,86 +133,83 @@ export function CelebrationEffects({
     for (const evt of newEvents) {
       if (
         evt.type === SESSION_EVENT_TYPES.PIPELINE_STATE_CHANGE &&
-        (evt.data.state as PipelineState | undefined)?.status ===
-          PIPELINE_STATUSES.STOPPED
+        (evt.data.state as PipelineState | undefined)?.status === PIPELINE_STATUSES.STOPPED
       ) {
-        if (!earned.current.has(ACHIEVEMENTS.CONVERGED.id)) {
-          earned.current.add(ACHIEVEMENTS.CONVERGED.id);
+        if (awardAchievement(ACHIEVEMENTS.CONVERGED.id)) {
           confetti({
             particleCount: 100,
             spread: 80,
             gravity: 0.6,
             origin: { y: 0.3 },
-            colors: ["#00CFFF", "#A78BFA"],
+            colors: CONFETTI_COLORS,
           });
         }
       }
     }
-  }, [events]);
-
-  // ── Sync earned ref → reducer state (deferred to avoid lint) ──────────
+  }, [events, awardAchievement]);
 
   useEffect(() => {
-    const earnedArr = Array.from(earned.current);
-    for (const id of earnedArr) {
-      if (!state.badges.includes(id)) {
-        dispatch({ type: "ADD_BADGE", id });
-      }
-    }
-  });
-
-  // ── Banner management ─────────────────────────────────────────────────
-
-  useEffect(() => {
-    if (earned.current.size > 0) {
-      const latest = Array.from(earned.current).pop();
-      const achievement = ALL_ACHIEVEMENTS.find((a) => a.id === latest);
-      if (achievement && state.banner !== achievement.description) {
-        dispatch({ type: "SHOW_BANNER", text: achievement.description });
-        if (bannerTimer.current) clearTimeout(bannerTimer.current);
-        bannerTimer.current = setTimeout(
-          () => dispatch({ type: "HIDE_BANNER" }),
-          4000,
-        );
-      }
-    }
     return () => {
       if (bannerTimer.current) clearTimeout(bannerTimer.current);
     };
-  });
-
-  // ── Render ────────────────────────────────────────────────────────────
+  }, []);
 
   return (
     <>
       {/* Banner */}
-      {state.banner && (
-        <div className="pointer-events-none fixed inset-x-0 top-16 z-[999] flex justify-center animate-fade-in-up">
-          <div className="rounded-xl border border-accent/30 bg-surface/95 px-6 py-3 shadow-2xl backdrop-blur-md glow-accent">
-            <p className="font-[family-name:var(--font-display)] text-sm font-bold uppercase tracking-wider text-accent">
-              {state.banner}
-            </p>
-          </div>
-        </div>
-      )}
+      <AnimatePresence>
+        {state.banner && (
+          <motion.div
+            className="pointer-events-none fixed inset-x-0 top-16 z-[999] flex justify-center"
+            initial={{ opacity: 0, y: -20, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -20, scale: 0.9 }}
+            transition={SPRING}
+          >
+            <div
+              className="rounded-2xl border border-white/[0.08] px-6 py-3 shadow-[0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-xl"
+              style={{
+                background: "rgba(20, 21, 31, 0.85)",
+                boxShadow: "0 0 20px rgba(0, 229, 255, 0.15), 0 8px 32px rgba(0,0,0,0.4)",
+              }}
+            >
+              <p className="text-sm font-bold uppercase tracking-wider text-accent">
+                {state.banner}
+              </p>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-      {/* Achievement badges (bottom-right) */}
+      {/* Achievement badges */}
       {state.badges.length > 0 && (
-        <div className="fixed bottom-16 right-4 z-40 flex flex-col items-end gap-1.5">
-          {state.badges.map((id) => {
+        <div className="fixed bottom-16 right-4 z-40 flex flex-col items-end gap-2">
+          {state.badges.map((id, idx) => {
             const achievement = ALL_ACHIEVEMENTS.find((a) => a.id === id);
             if (!achievement) return null;
             return (
-              <div
+              <motion.div
                 key={id}
-                className="flex items-center gap-2 rounded-full border border-border-subtle bg-surface/90 px-3 py-1 shadow-lg backdrop-blur-sm animate-fade-in"
+                className="flex items-center gap-2 rounded-full border border-white/[0.08] px-3.5 py-1.5 shadow-lg backdrop-blur-xl"
+                style={{
+                  background: "rgba(20, 21, 31, 0.8)",
+                  boxShadow: `0 0 12px ${achievement.glow}20`,
+                }}
+                initial={{ opacity: 0, x: 40, scale: 0.8 }}
+                animate={{ opacity: 1, x: 0, scale: 1 }}
+                transition={{ ...SPRING, delay: idx * 0.1 }}
                 title={achievement.description}
               >
-                <span className="text-sm">{achievement.icon}</span>
-                <span className="font-[family-name:var(--font-display)] text-[9px] font-bold uppercase tracking-wider text-accent">
+                <span
+                  className="flex h-6 w-6 items-center justify-center rounded-full text-sm"
+                  style={{ boxShadow: `0 0 8px ${achievement.glow}40` }}
+                >
+                  {achievement.icon}
+                </span>
+                <span className="text-[9px] font-bold uppercase tracking-wider text-accent">
                   {achievement.label}
                 </span>
-              </div>
+              </motion.div>
             );
           })}
         </div>
