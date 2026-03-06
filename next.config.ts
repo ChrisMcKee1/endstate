@@ -1,8 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
   reactCompiler: true,
+  serverExternalPackages: ["@github/copilot-sdk", "@github/copilot"],
 };
 
 export default nextConfig;

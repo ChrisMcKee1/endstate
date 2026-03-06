@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import type { PipelineConfig, Severity } from "@/lib/types";
 import { SEVERITIES } from "@/lib/types";
 import { ModelSelector } from "@/components/ModelSelector";
+import { CustomizationPanel } from "@/components/CustomizationPanel";
 
 const SEVERITY_OPTIONS: Severity[] = [
   SEVERITIES.CRITICAL,
@@ -22,6 +23,7 @@ export function SettingsPanel({ config, onClose, onSave }: SettingsPanelProps) {
   const [draft, setDraft] = useState<PipelineConfig>({ ...config });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [view, setView] = useState<"settings" | "customizations">("settings");
 
   // Close on Escape
   useEffect(() => {
@@ -97,7 +99,48 @@ export function SettingsPanel({ config, onClose, onSave }: SettingsPanelProps) {
           </button>
         </div>
 
+        {/* View toggle */}
+        <div className="flex shrink-0 border-b border-border-subtle">
+          <button
+            onClick={() => setView("settings")}
+            className={`flex-1 py-2 text-center font-[family-name:var(--font-display)] text-[10px] uppercase tracking-widest transition-colors ${
+              view === "settings"
+                ? "border-b-2 border-accent text-accent"
+                : "text-text-muted hover:text-text-secondary"
+            }`}
+          >
+            Pipeline
+          </button>
+          <button
+            onClick={() => setView("customizations")}
+            className={`flex-1 py-2 text-center font-[family-name:var(--font-display)] text-[10px] uppercase tracking-widest transition-colors ${
+              view === "customizations"
+                ? "border-b-2 border-accent text-accent"
+                : "text-text-muted hover:text-text-secondary"
+            }`}
+          >
+            Customizations
+          </button>
+        </div>
+
         {/* Content */}
+        {view === "customizations" ? (
+          <CustomizationPanel
+            skills={draft.skills}
+            customAgents={draft.customAgentDefinitions}
+            mcpServers={draft.mcpServerOverrides}
+            toolOverrides={draft.toolOverrides}
+            onSkillsChange={(v) => update("skills", v)}
+            onCustomAgentsChange={(v) => update("customAgentDefinitions", v)}
+            onMcpServersChange={(v) => update("mcpServerOverrides", v)}
+            onToolOverridesChange={(v) => update("toolOverrides", v)}
+            onSave={handleSave}
+            saving={saving}
+            projectPath={draft.projectPath}
+          />
+        ) : (
+        <>
+        {/* Pipeline settings content */}
         <div className="flex-1 overflow-y-auto p-4">
           {/* Model */}
           <div className="mb-5">
@@ -221,6 +264,8 @@ export function SettingsPanel({ config, onClose, onSave }: SettingsPanelProps) {
             {saving ? "Saving…" : "Save Settings"}
           </button>
         </div>
+        </>
+        )}
       </div>
     </div>
   );

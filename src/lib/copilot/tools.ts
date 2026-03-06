@@ -56,7 +56,7 @@ export const createTaskTool = defineTool("create_task", {
     files: z.array(z.string()).optional().describe("Affected file paths"),
     tags: z.array(z.string()).optional().describe("Free-form tags"),
   }),
-  handler: async (params) => {
+  handler: async (params, _invocation) => {
     const task = createTask(params);
     return { taskId: task.id, status: task.status };
   },
@@ -86,7 +86,7 @@ export const updateTaskTool = defineTool("update_task", {
     files: z.array(z.string()).optional().describe("Additional affected files"),
     tags: z.array(z.string()).optional().describe("Additional tags"),
   }),
-  handler: async (params) => {
+  handler: async (params, _invocation) => {
     const task = updateTask(params);
     return { taskId: task.id, status: task.status, timelineLength: task.timeline.length };
   },
@@ -101,7 +101,7 @@ export const listTasksTool = defineTool("list_tasks", {
     status: statusEnum.optional().describe("Filter by status"),
     severity: severityEnum.optional().describe("Filter by severity"),
   }),
-  handler: async (params) => {
+  handler: async (params, _invocation) => {
     let tasks = getAllTasks();
     if (params.status) {
       tasks = tasks.filter((t) => t.status === params.status);
@@ -130,7 +130,7 @@ export const checkAppHealthTool = defineTool("check_app_health", {
   parameters: z.object({
     url: z.string().describe("Base URL of the target application"),
   }),
-  handler: async ({ url }) => {
+  handler: async ({ url }, _invocation) => {
     try {
       const resp = await fetch(url, { signal: AbortSignal.timeout(10_000) });
       return { healthy: resp.ok, status: resp.status, url };

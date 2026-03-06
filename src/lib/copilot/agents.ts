@@ -3,6 +3,8 @@ import path from "node:path";
 import { getClient } from "@/lib/copilot/client";
 import { agentTools } from "@/lib/copilot/tools";
 import { dequeue, isEmpty } from "@/lib/pipeline/steering";
+import { getSkillDirectoriesForAgent } from "@/lib/pipeline/skill-manager";
+import { getMcpServersForAgent } from "@/lib/pipeline/mcp-manager";
 import { startToolSpan, endSpanOk } from "@/lib/otel/spans";
 import { recordToolInvocation } from "@/lib/otel/metrics";
 import type { AgentRole, PipelineConfig } from "@/lib/types";
@@ -80,27 +82,41 @@ function mcpServersForRole(
   }
 }
 
+// ─── Tool overrides ───────────────────────────────────────────────────────────
+
+function buildToolLists(config: PipelineConfig): {
+  excludedTools?: string[];
+} {
+  const overrides = config.toolOverrides;
+  if (!overrides || overrides.length === 0) return {};
+
+  const excluded = overrides.filter((t) => !t.enabled).map((t) => t.name);
+  if (excluded.length === 0) return {};
+
+  return { excludedTools: excluded };
+}
+
 // ─── Session hooks ────────────────────────────────────────────────────────────
 
 // Track OTel spans across pre/post hooks without mutating hook inputs
 const spanMap = new WeakMap<object, ReturnType<typeof startToolSpan>>();
 
-function buildHooks(): SessionConfig["hooks"] {
+function buildHooks(): NonNullable<SessionConfig["hooks"]> {
   return {
-    onPreToolUse: async (input) => {
+    onPreToolUse: async (input, _invocation) => {
       const span = startToolSpan(input.toolName, "");
       recordToolInvocation(input.toolName);
       spanMap.set(input, span);
       return { permissionDecision: "allow" as const };
     },
-    onPostToolUse: async (input) => {
+    onPostToolUse: async (input, _invocation) => {
       const span = spanMap.get(input);
       if (span) {
         endSpanOk(span);
         spanMap.delete(input);
       }
     },
-    onUserPromptSubmitted: async (input) => {
+    onUserPromptSubmitted: async (input, _invocation) => {
       if (isEmpty()) return { modifiedPrompt: input.prompt };
       const steering = dequeue();
       if (!steering) return { modifiedPrompt: input.prompt };
@@ -120,12 +136,39 @@ export async function createAgentSession(
   const client = await getClient();
   const systemPrompt = loadSystemPrompt(role, config);
 
-  const session = await client.createSession({
+  // Resolve MCP servers: default per role, merged with user overrides
+  const defaultMcps = mcpServersForRole(role, config.projectPath);
+  const mcpServers = getMcpServersForAgent(
+    role,
+    defaultMcps,
+    config.mcpServerOverrides ?? []
+  );
+
+  // Resolve skill directories for this agent
+  const skillDirectories = getSkillDirectoriesForAgent(
+    role,
+    config.skills ?? []
+  );
+
+  // Resolve custom agents
+  const customAgents = (config.customAgentDefinitions ?? [])
+    .filter((a) => a.enabled)
+    .map(({ name, displayName, description, prompt }) => ({
+      name,
+      displayName,
+      description,
+      prompt,
+    }));
+
+  // Resolve tool overrides
+  const toolLists = buildToolLists(config);
+
+  const sessionConfig: Parameters<typeof client.createSession>[0] = {
     model: config.model,
     streaming: true,
-    systemMessage: { content: systemPrompt },
+    systemMessage: { mode: "replace", content: systemPrompt },
     tools: agentTools,
-    mcpServers: mcpServersForRole(role, config.projectPath),
+    mcpServers,
     infiniteSessions: {
       enabled: config.infiniteSessions,
       backgroundCompactionThreshold: 0.75,
@@ -133,7 +176,11 @@ export async function createAgentSession(
     },
     onPermissionRequest: approveAll,
     hooks: buildHooks(),
-  });
+    ...(skillDirectories.length > 0 && { skillDirectories }),
+    ...(customAgents.length > 0 && { customAgents }),
+    ...(toolLists.excludedTools && { excludedTools: toolLists.excludedTools }),
+    ...(config.reasoningEffort && { reasoningEffort: config.reasoningEffort }),
+  };
 
-  return session;
+  return client.createSession(sessionConfig);
 }

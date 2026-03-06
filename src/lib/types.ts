@@ -120,6 +120,11 @@ export interface PipelineConfig {
   enableAnalyst: boolean;
   enableFixer: boolean;
   enableUxReviewer: boolean;
+  reasoningEffort?: ReasoningEffort;
+  skills: SkillDefinition[];
+  customAgentDefinitions: CustomAgentDefinition[];
+  mcpServerOverrides: McpServerEntry[];
+  toolOverrides: ToolEntry[];
 }
 
 export interface PipelineState {
@@ -147,6 +152,78 @@ export interface SSEEvent {
   timestamp: string;
   agent?: AgentRole;
   data: Record<string, unknown>;
+}
+
+// ─── Customization Types ──────────────────────────────────────────────────────
+
+export const REASONING_EFFORTS = {
+  LOW: "low",
+  MEDIUM: "medium",
+  HIGH: "high",
+  XHIGH: "xhigh",
+} as const;
+
+export type ReasoningEffort =
+  (typeof REASONING_EFFORTS)[keyof typeof REASONING_EFFORTS];
+
+export const SKILL_SOURCES = {
+  LOCAL: "local",
+  IMPORTED: "imported",
+} as const;
+
+export type SkillSource = (typeof SKILL_SOURCES)[keyof typeof SKILL_SOURCES];
+
+export const MCP_SERVER_TYPES = {
+  STDIO: "stdio",
+  HTTP: "http",
+} as const;
+
+export type McpServerType =
+  (typeof MCP_SERVER_TYPES)[keyof typeof MCP_SERVER_TYPES];
+
+export const TOOL_TYPES = {
+  BUILTIN: "builtin",
+  CUSTOM: "custom",
+} as const;
+
+export type ToolType = (typeof TOOL_TYPES)[keyof typeof TOOL_TYPES];
+
+export interface SkillDefinition {
+  id: string;
+  name: string;
+  description: string;
+  filePath: string;
+  enabled: boolean;
+  assignedAgents: AgentRole[];
+  source: SkillSource;
+}
+
+export interface CustomAgentDefinition {
+  name: string;
+  displayName: string;
+  description: string;
+  prompt: string;
+  enabled: boolean;
+}
+
+export interface McpServerEntry {
+  id: string;
+  name: string;
+  type: McpServerType;
+  command?: string;
+  args?: string[];
+  url?: string;
+  env?: Record<string, string>;
+  headers?: Record<string, string>;
+  tools?: string[];
+  enabled: boolean;
+  assignedAgents: AgentRole[];
+}
+
+export interface ToolEntry {
+  name: string;
+  type: ToolType;
+  enabled: boolean;
 }
 
 // ─── API Request/Response Schemas ─────────────────────────────────────────────

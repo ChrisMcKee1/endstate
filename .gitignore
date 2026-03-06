@@ -55,3 +55,5 @@ otel-data/
 
 # Runtime config generated in target projects
 # .agentic-dev.json  (tracked per-project, but not in this repo)
+.playwright-cli/*
+*.png

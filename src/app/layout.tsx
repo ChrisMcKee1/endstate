@@ -1,24 +1,7 @@
 import type { Metadata } from "next";
-import { Orbitron, Sora, JetBrains_Mono } from "next/font/google";
+import { GeistSans } from "geist/font/sans";
+import { GeistMono } from "geist/font/mono";
 import "./globals.css";
-
-const orbitron = Orbitron({
-  variable: "--font-orbitron",
-  subsets: ["latin"],
-  display: "swap",
-});
-
-const sora = Sora({
-  variable: "--font-sora",
-  subsets: ["latin"],
-  display: "swap",
-});
-
-const jetbrainsMono = JetBrains_Mono({
-  variable: "--font-jetbrains-mono",
-  subsets: ["latin"],
-  display: "swap",
-});
 
 export const metadata: Metadata = {
   title: "Agentic App Dev — Autonomous Development Dashboard",
@@ -34,7 +17,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <body
-        className={`${orbitron.variable} ${sora.variable} ${jetbrainsMono.variable} antialiased`}
+        className={`${GeistSans.variable} ${GeistMono.variable} antialiased`}
       >
         {children}
       </body>

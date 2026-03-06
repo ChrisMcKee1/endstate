@@ -1,10 +1,14 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import type { PipelineConfig, Severity } from "@/lib/types";
 import { SEVERITIES } from "@/lib/types";
 import { ModelSelector } from "@/components/ModelSelector";
+import { SkillManager } from "@/components/SkillManager";
+import { McpServerManager } from "@/components/McpServerManager";
+import { ToolManager } from "@/components/ToolManager";
+import { openFolderPicker, validatePath } from "@/app/actions/browse";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -13,6 +17,7 @@ const STEPS = [
   { label: "Vision", icon: "💡" },
   { label: "Model", icon: "🤖" },
   { label: "Pipeline", icon: "⚙️" },
+  { label: "Customize", icon: "🧩" },
   { label: "Launch", icon: "🚀" },
 ] as const;
 
@@ -73,6 +78,10 @@ const DEFAULT_CONFIG: PipelineConfig = {
   enableAnalyst: true,
   enableFixer: true,
   enableUxReviewer: true,
+  skills: [],
+  customAgentDefinitions: [],
+  mcpServerOverrides: [],
+  toolOverrides: [],
 };
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -99,14 +108,56 @@ export function SetupWizard() {
         return config.inspiration.trim().length > 0;
       case 2:
         return config.model.trim().length > 0;
-      case 3:
-        return true;
-      case 4:
-        return true;
       default:
-        return false;
+        return true;
     }
   }, [step, config]);
+
+  const [browsing, setBrowsing] = useState(false);
+  const [pathValidation, setPathValidation] = useState<{
+    exists: boolean;
+    isDirectory: boolean;
+    projectType: string | null;
+    isEmpty: boolean;
+  } | null>(null);
+  const [validating, setValidating] = useState(false);
+  const validateTimer = useRef<ReturnType<typeof setTimeout>>(null);
+
+  // Real-time path validation with debounce
+  useEffect(() => {
+    if (validateTimer.current) clearTimeout(validateTimer.current);
+
+    const trimmed = config.projectPath.trim();
+    if (!trimmed) {
+      setPathValidation(null);
+      return;
+    }
+
+    setValidating(true);
+    validateTimer.current = setTimeout(async () => {
+      const result = await validatePath(trimmed);
+      setPathValidation(result);
+      setValidating(false);
+    }, 400);
+
+    return () => {
+      if (validateTimer.current) clearTimeout(validateTimer.current);
+    };
+  }, [config.projectPath]);
+
+  const handleBrowse = async () => {
+    setBrowsing(true);
+    try {
+      const result = await openFolderPicker();
+      if (result.path) {
+        update("projectPath", result.path);
+      }
+    } catch {
+      // Dialog failed or was cancelled
+    } finally {
+      setBrowsing(false);
+    }
+  };
 
   const handleLaunch = async () => {
     setLaunching(true);
@@ -167,16 +218,17 @@ export function SetupWizard() {
               <button
                 onClick={() => i < step && setStep(i)}
                 disabled={i >= step}
+                title={s.label}
                 className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs transition-colors ${
                   i === step
                     ? "border border-accent bg-accent/10 text-accent"
                     : i < step
                       ? "text-text-secondary hover:text-accent"
-                      : "text-text-muted/40"
+                      : "text-text-muted/60"
                 }`}
               >
                 <span className="text-xs">{s.icon}</span>
-                <span className="font-[family-name:var(--font-display)] text-[9px] uppercase tracking-wider">
+                <span className="font-[family-name:var(--font-display)] text-[10px] uppercase tracking-wider">
                   {s.label}
                 </span>
               </button>
@@ -206,13 +258,94 @@ export function SetupWizard() {
                 </p>
 
                 <div className="space-y-3">
-                  <input
-                    type="text"
-                    value={config.projectPath}
-                    onChange={(e) => update("projectPath", e.target.value)}
-                    placeholder="/path/to/your/project"
-                    className="w-full rounded-lg border border-border-subtle bg-void/50 px-4 py-3 font-[family-name:var(--font-code)] text-sm text-text-primary placeholder:text-text-muted/30 focus:border-accent/50 focus:outline-none focus:ring-1 focus:ring-accent/20"
-                  />
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <input
+                        type="text"
+                        value={config.projectPath}
+                        onChange={(e) => update("projectPath", e.target.value)}
+                        placeholder={typeof navigator !== "undefined" && navigator.platform?.startsWith("Win") ? "C:\\Users\\you\\project" : "~/your/project"}
+                        className={`w-full rounded-lg border bg-void/50 px-4 py-3 pr-10 font-[family-name:var(--font-code)] text-sm text-text-primary placeholder:text-text-muted/30 focus:outline-none focus:ring-1 ${
+                          pathValidation?.exists && pathValidation.isDirectory
+                            ? "border-status-live/50 focus:border-status-live/70 focus:ring-status-live/20"
+                            : pathValidation && config.projectPath.trim()
+                              ? "border-severity-critical/50 focus:border-severity-critical/70 focus:ring-severity-critical/20"
+                              : "border-border-subtle focus:border-accent/50 focus:ring-accent/20"
+                        }`}
+                      />
+                      {/* Validation indicator */}
+                      <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                        {validating ? (
+                          <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-text-muted/30 border-t-accent" />
+                        ) : pathValidation?.exists && pathValidation.isDirectory ? (
+                          <span className="text-status-live" title="Directory found">✓</span>
+                        ) : pathValidation && config.projectPath.trim() ? (
+                          <span className="text-severity-critical" title="Path not found">✗</span>
+                        ) : null}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleBrowse}
+                      disabled={browsing}
+                      title="Open folder picker"
+                      className="shrink-0 rounded-lg border border-border-subtle bg-void/50 px-3 py-3 text-text-secondary transition-colors hover:border-accent/50 hover:bg-accent/5 hover:text-accent focus:border-accent/50 focus:outline-none disabled:opacity-50"
+                    >
+                      {browsing ? (
+                        <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-text-muted border-t-accent" />
+                      ) : (
+                        "📂"
+                      )}
+                    </button>
+                  </div>
+
+                  {/* Path validation feedback */}
+                  {browsing && (
+                    <div className="flex items-center gap-2 rounded-lg border border-accent/20 bg-accent/5 px-3 py-2">
+                      <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-accent/30 border-t-accent" />
+                      <span className="text-xs text-accent">
+                        Waiting for folder selection… Check your taskbar if you don&apos;t see the dialog.
+                      </span>
+                    </div>
+                  )}
+
+                  {pathValidation?.exists && pathValidation.isDirectory && (
+                    <div className="flex items-center gap-2 rounded-lg border border-status-live/20 bg-status-live/5 px-3 py-2">
+                      <span className="text-xs text-status-live">✓</span>
+                      <span className="text-xs text-text-secondary">
+                        {pathValidation.isEmpty ? (
+                          <>Empty folder — agents will <strong className="text-text-primary">build from scratch</strong></>
+                        ) : pathValidation.projectType ? (
+                          <>
+                            <span className="rounded bg-accent/10 px-1.5 py-0.5 font-[family-name:var(--font-code)] text-[10px] font-bold text-accent">
+                              {pathValidation.projectType}
+                            </span>{" "}
+                            project detected — agents will <strong className="text-text-primary">analyze &amp; improve</strong>
+                          </>
+                        ) : (
+                          <>Folder found — agents will <strong className="text-text-primary">explore &amp; analyze</strong></>
+                        )}
+                      </span>
+                    </div>
+                  )}
+
+                  {pathValidation && !pathValidation.exists && config.projectPath.trim() && (
+                    <p className="text-[11px] text-severity-critical">
+                      Path not found. Check the path and try again.
+                    </p>
+                  )}
+
+                  {pathValidation && pathValidation.exists && !pathValidation.isDirectory && (
+                    <p className="text-[11px] text-severity-critical">
+                      This is a file, not a folder. Please select a directory.
+                    </p>
+                  )}
+
+                  {!browsing && !pathValidation && (
+                    <p className="text-[11px] text-text-muted">
+                      Type the full path or click 📂 to open the folder picker
+                    </p>
+                  )}
 
                   <input
                     type="text"
@@ -221,7 +354,7 @@ export function SetupWizard() {
                     placeholder="http://localhost:3000"
                     className="w-full rounded-lg border border-border-subtle bg-void/50 px-4 py-3 font-[family-name:var(--font-code)] text-sm text-text-primary placeholder:text-text-muted/30 focus:border-accent/50 focus:outline-none focus:ring-1 focus:ring-accent/20"
                   />
-                  <p className="text-[10px] text-text-muted">
+                  <p className="text-[11px] text-text-muted">
                     URL where the running app can be accessed by agents
                   </p>
                 </div>
@@ -321,7 +454,7 @@ export function SetupWizard() {
                       }
                       className="w-full accent-accent"
                     />
-                    <div className="mt-0.5 flex justify-between text-[9px] text-text-muted">
+                    <div className="mt-0.5 flex justify-between text-[11px] text-text-muted">
                       <span>Quick scan</span>
                       <span>Deep analysis</span>
                     </div>
@@ -337,7 +470,7 @@ export function SetupWizard() {
                         <button
                           key={sev}
                           onClick={() => update("fixSeverity", sev)}
-                          className={`flex-1 rounded border py-2 text-[10px] font-bold transition-colors ${
+                          className={`flex-1 rounded border py-2 text-[11px] font-bold transition-colors ${
                             config.fixSeverity === sev
                               ? "border-accent bg-accent/10 text-accent"
                               : "border-border-subtle bg-void/50 text-text-muted hover:text-text-secondary"
@@ -411,8 +544,51 @@ export function SetupWizard() {
               </div>
             )}
 
-            {/* Step 4: Confirmation */}
+            {/* Step 4: Customize */}
             {step === 4 && (
+              <div>
+                <h2 className="mb-1 font-[family-name:var(--font-display)] text-sm font-bold uppercase tracking-wider text-text-primary">
+                  Customize
+                </h2>
+                <p className="mb-4 text-xs text-text-muted">
+                  Configure skills, MCP servers, and tool access before launching. You can fine-tune these later in Settings.
+                </p>
+
+                <div className="space-y-5">
+                  {/* Skills quick view */}
+                  <div>
+                    <label className="mb-2 block text-xs text-text-secondary">Skills</label>
+                    <SkillManager
+                      skills={config.skills}
+                      onChange={(v) => update("skills", v)}
+                      projectPath={config.projectPath}
+                    />
+                  </div>
+
+                  {/* MCP servers quick view */}
+                  <div>
+                    <label className="mb-2 block text-xs text-text-secondary">MCP Servers</label>
+                    <McpServerManager
+                      servers={config.mcpServerOverrides}
+                      onChange={(v) => update("mcpServerOverrides", v)}
+                      projectPath={config.projectPath}
+                    />
+                  </div>
+
+                  {/* Tools quick view */}
+                  <div>
+                    <label className="mb-2 block text-xs text-text-secondary">Tool Access</label>
+                    <ToolManager
+                      tools={config.toolOverrides}
+                      onChange={(v) => update("toolOverrides", v)}
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Step 5: Confirmation */}
+            {step === 5 && (
               <div>
                 <h2 className="mb-1 font-[family-name:var(--font-display)] text-sm font-bold uppercase tracking-wider text-text-primary">
                   Ready to Launch
@@ -497,11 +673,11 @@ export function SetupWizard() {
               ← Back
             </button>
 
-            {step < 4 && (
+            {step < 5 && (
               <button
-                onClick={() => setStep((s) => Math.min(4, s + 1))}
+                onClick={() => setStep((s) => Math.min(5, s + 1))}
                 disabled={!canAdvance()}
-                className="rounded-lg bg-accent/10 px-6 py-2 font-[family-name:var(--font-display)] text-xs font-bold uppercase tracking-wider text-accent transition-all hover:bg-accent/20 disabled:opacity-30"
+                className="rounded-lg bg-accent/10 px-8 py-2.5 font-[family-name:var(--font-display)] text-sm font-bold uppercase tracking-wider text-accent transition-all hover:bg-accent/20 hover:shadow-[0_0_20px_rgba(0,207,255,0.15)] disabled:opacity-30"
               >
                 Next →
               </button>
@@ -546,7 +722,7 @@ function AgentToggle({
 function SummaryRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-start gap-3">
-      <span className="w-20 shrink-0 font-[family-name:var(--font-display)] text-[10px] uppercase tracking-wider text-text-muted">
+      <span className="w-20 shrink-0 font-[family-name:var(--font-display)] text-[11px] uppercase tracking-wider text-text-muted">
         {label}
       </span>
       <span className="font-[family-name:var(--font-code)] text-xs text-text-secondary">
