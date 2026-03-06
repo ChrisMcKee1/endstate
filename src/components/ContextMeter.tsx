@@ -5,26 +5,24 @@ interface ContextMeterProps {
   isCompacting: boolean;
 }
 
+function meterColor(pct: number): string {
+  if (pct < 50) return "bg-status-live";
+  if (pct < 75) return "bg-severity-medium";
+  if (pct < 90) return "bg-severity-high";
+  return "bg-severity-critical";
+}
+
+function meterTextColor(pct: number): string {
+  if (pct < 50) return "text-status-live";
+  if (pct < 75) return "text-severity-medium";
+  if (pct < 90) return "text-severity-high";
+  return "text-severity-critical";
+}
+
 export function ContextMeter({ usage, isCompacting }: ContextMeterProps) {
   const pct = Math.round(usage * 100);
-
-  const color =
-    pct < 50
-      ? "bg-status-live"
-      : pct < 75
-        ? "bg-severity-medium"
-        : pct < 90
-          ? "bg-severity-high"
-          : "bg-severity-critical";
-
-  const textColor =
-    pct < 50
-      ? "text-status-live"
-      : pct < 75
-        ? "text-severity-medium"
-        : pct < 90
-          ? "text-severity-high"
-          : "text-severity-critical";
+  const color = meterColor(pct);
+  const textColor = meterTextColor(pct);
 
   return (
     <div

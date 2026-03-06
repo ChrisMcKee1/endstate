@@ -6,6 +6,7 @@ const HEARTBEAT_INTERVAL = 15_000;
 
 export async function GET() {
   const encoder = new TextEncoder();
+  let cleanupFn: (() => void) | null = null;
 
   const stream = new ReadableStream({
     start(controller) {
@@ -46,19 +47,14 @@ export async function GET() {
         }
       }, HEARTBEAT_INTERVAL);
 
-      // Cleanup on cancel
-      const cleanup = () => {
+      cleanupFn = () => {
         clearInterval(heartbeat);
         unsubscribe();
       };
-
-      // Store cleanup for cancel handler
-      (controller as unknown as Record<string, unknown>)._cleanup = cleanup;
     },
-    cancel(controller) {
-      const cleanup = (controller as unknown as Record<string, unknown>)
-        ._cleanup as (() => void) | undefined;
-      cleanup?.();
+    cancel() {
+      cleanupFn?.();
+      cleanupFn = null;
     },
   });
 

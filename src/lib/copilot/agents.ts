@@ -131,7 +131,7 @@ export async function createAgentSession(
       backgroundCompactionThreshold: 0.75,
       bufferExhaustionThreshold: 0.9,
     },
-    onPermissionRequest: config.autoApprove ? approveAll : approveAll,
+    onPermissionRequest: approveAll,
     hooks: buildHooks(),
   });
 

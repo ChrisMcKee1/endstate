@@ -46,6 +46,21 @@ const TYPE_ICONS: Record<StreamEntry["type"], string> = {
   system: "📡",
 };
 
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function formatTime(ts: string): string {
+  try {
+    return new Date(ts).toLocaleTimeString("en-US", {
+      hour12: false,
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    });
+  } catch {
+    return "";
+  }
+}
+
 // ─── Component ───────────────────────────────────────────────────────────────
 
 interface AgentStreamProps {
@@ -81,19 +96,6 @@ export function AgentStream({ entries, activeAgent }: AgentStreamProps) {
       return next;
     });
   }, []);
-
-  const formatTime = (ts: string) => {
-    try {
-      return new Date(ts).toLocaleTimeString("en-US", {
-        hour12: false,
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-      });
-    } catch {
-      return "";
-    }
-  };
 
   // Group consecutive message entries from the same agent into blocks
   const renderEntries = () => {

@@ -17,14 +17,6 @@ export function dequeue(): SteeringMessage | undefined {
   return queue.shift();
 }
 
-export function peek(): SteeringMessage | undefined {
-  return queue[0];
-}
-
 export function isEmpty(): boolean {
   return queue.length === 0;
-}
-
-export function size(): number {
-  return queue.length;
 }

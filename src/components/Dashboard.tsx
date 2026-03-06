@@ -62,6 +62,14 @@ const TAB_LABELS: Record<SidebarTab, string> = {
   metrics: "Metrics",
 };
 
+const STATUS_COLORS: Record<string, string> = {
+  running: "bg-status-live",
+  paused: "bg-status-paused",
+  error: "bg-status-error",
+  idle: "bg-status-idle",
+  stopped: "bg-status-idle",
+};
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 interface DashboardProps {
@@ -221,14 +229,6 @@ export function Dashboard({ config }: DashboardProps) {
 
   // ── Status label ────────────────────────────────────────────────────────────
 
-  const statusColor: Record<string, string> = {
-    running: "bg-status-live",
-    paused: "bg-status-paused",
-    error: "bg-status-error",
-    idle: "bg-status-idle",
-    stopped: "bg-status-idle",
-  };
-
   const statusLabel =
     pipelineState.status === PIPELINE_STATUSES.RUNNING
       ? "LIVE"
@@ -267,7 +267,7 @@ export function Dashboard({ config }: DashboardProps) {
 
           <div className="flex items-center gap-1.5">
             <span
-              className={`h-2 w-2 rounded-full ${statusColor[pipelineState.status] ?? "bg-status-idle"} ${
+              className={`h-2 w-2 rounded-full ${STATUS_COLORS[pipelineState.status] ?? "bg-status-idle"} ${
                 pipelineState.status === PIPELINE_STATUSES.RUNNING
                   ? "animate-pulse"
                   : ""
@@ -408,7 +408,6 @@ export function Dashboard({ config }: DashboardProps) {
       {/* ── Celebrations ───────────────────────────────────────────────── */}
       <CelebrationEffects
         tasks={tasks}
-        pipelineState={pipelineState}
         events={events}
       />
     </div>

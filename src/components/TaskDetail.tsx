@@ -53,6 +53,28 @@ const FILE_ICONS: Record<string, string> = {
   cs: "🟣",
 };
 
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function getFileExt(filePath: string): string {
+  const parts = filePath.split(".");
+  return parts[parts.length - 1];
+}
+
+function formatTimestamp(ts: string): string {
+  try {
+    return new Date(ts).toLocaleString("en-US", {
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+    });
+  } catch {
+    return ts;
+  }
+}
+
 // ─── Component ───────────────────────────────────────────────────────────────
 
 interface TaskDetailProps {
@@ -81,26 +103,6 @@ export function TaskDetail({ task, onClose }: TaskDetailProps) {
       return next;
     });
   }, []);
-
-  const getFileExt = (path: string) => {
-    const parts = path.split(".");
-    return parts[parts.length - 1];
-  };
-
-  const formatTimestamp = (ts: string) => {
-    try {
-      return new Date(ts).toLocaleString("en-US", {
-        month: "short",
-        day: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-        hour12: false,
-      });
-    } catch {
-      return ts;
-    }
-  };
 
   return (
     <div

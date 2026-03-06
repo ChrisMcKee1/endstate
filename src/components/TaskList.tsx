@@ -32,6 +32,21 @@ const STATUS_COLORS: Record<TaskStatus, string> = {
 type SortKey = "severity" | "status" | "cycle";
 type FilterSeverity = Severity | "ALL";
 
+const SEVERITY_ORDER: Record<Severity, number> = {
+  [SEVERITIES.CRITICAL]: 0,
+  [SEVERITIES.HIGH]: 1,
+  [SEVERITIES.MEDIUM]: 2,
+  [SEVERITIES.LOW]: 3,
+};
+
+const STATUS_ORDER: Record<TaskStatus, number> = {
+  [TASK_STATUSES.IN_PROGRESS]: 0,
+  [TASK_STATUSES.OPEN]: 1,
+  [TASK_STATUSES.DEFERRED]: 2,
+  [TASK_STATUSES.RESOLVED]: 3,
+  [TASK_STATUSES.WONT_FIX]: 4,
+};
+
 // ─── Component ───────────────────────────────────────────────────────────────
 
 interface TaskListProps {
@@ -44,13 +59,6 @@ export function TaskList({ tasks, onSelectTask }: TaskListProps) {
   const [filterSeverity, setFilterSeverity] = useState<FilterSeverity>("ALL");
 
   const sortedTasks = useMemo(() => {
-    const sevOrder: Record<Severity, number> = {
-      [SEVERITIES.CRITICAL]: 0,
-      [SEVERITIES.HIGH]: 1,
-      [SEVERITIES.MEDIUM]: 2,
-      [SEVERITIES.LOW]: 3,
-    };
-
     let filtered = tasks;
     if (filterSeverity !== "ALL") {
       filtered = tasks.filter((t) => t.severity === filterSeverity);
@@ -59,17 +67,9 @@ export function TaskList({ tasks, onSelectTask }: TaskListProps) {
     return [...filtered].sort((a, b) => {
       switch (sortBy) {
         case "severity":
-          return sevOrder[a.severity] - sevOrder[b.severity];
-        case "status": {
-          const statusOrder: Record<TaskStatus, number> = {
-            [TASK_STATUSES.IN_PROGRESS]: 0,
-            [TASK_STATUSES.OPEN]: 1,
-            [TASK_STATUSES.DEFERRED]: 2,
-            [TASK_STATUSES.RESOLVED]: 3,
-            [TASK_STATUSES.WONT_FIX]: 4,
-          };
-          return statusOrder[a.status] - statusOrder[b.status];
-        }
+          return SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity];
+        case "status":
+          return STATUS_ORDER[a.status] - STATUS_ORDER[b.status];
         case "cycle":
           return b.cycle - a.cycle;
         default:

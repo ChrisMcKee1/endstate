@@ -7,9 +7,8 @@ import type {
   TaskStatus,
   Severity,
   TaskEvent,
-  TaskAction,
 } from "@/lib/types";
-import { TASK_STATUSES } from "@/lib/types";
+import { TASK_STATUSES, TASK_ACTIONS } from "@/lib/types";
 
 const DATA_DIR = path.join(process.cwd(), "data", "tasks");
 const tasks = new Map<string, Task>();
@@ -71,7 +70,7 @@ export function createTask(input: TaskCreateInput): Task {
 
   const initialEvent: TaskEvent = {
     agent: input.agent,
-    action: "discovered" as TaskAction,
+    action: TASK_ACTIONS.DISCOVERED,
     timestamp: now,
     cycle: input.cycle,
     detail: input.detail,

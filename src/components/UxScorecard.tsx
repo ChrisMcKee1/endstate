@@ -30,6 +30,13 @@ function scoreTextColor(score: number): string {
   return "text-severity-critical";
 }
 
+function verdictText(score: number): string {
+  if (score >= 8) return "Ready for production. Users will love this.";
+  if (score >= 6) return "Acceptable but could use refinement in key areas.";
+  if (score >= 4) return "Needs significant UX improvements before launch.";
+  return "Critical UX issues found. Major rework needed.";
+}
+
 // ─── Component ───────────────────────────────────────────────────────────────
 
 interface UxScorecardProps {
@@ -181,13 +188,7 @@ export function UxScorecard({ tasks }: UxScorecardProps) {
             Verdict
           </p>
           <p className="mt-1 text-xs text-text-secondary">
-            {uxData.overallScore >= 8
-              ? "Ready for production. Users will love this."
-              : uxData.overallScore >= 6
-                ? "Acceptable but could use refinement in key areas."
-                : uxData.overallScore >= 4
-                  ? "Needs significant UX improvements before launch."
-                  : "Critical UX issues found. Major rework needed."}
+            {verdictText(uxData.overallScore)}
           </p>
         </div>
       )}

@@ -55,7 +55,6 @@ function celebrationReducer(
 
 interface CelebrationEffectsProps {
   tasks: Task[];
-  pipelineState: PipelineState;
   events: SSEEvent[];
 }
 
