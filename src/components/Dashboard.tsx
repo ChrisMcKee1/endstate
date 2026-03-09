@@ -16,7 +16,7 @@ import {
 import { useSSE } from "@/hooks/useSSE";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { WorkflowGraph } from "@/components/WorkflowGraph";
-import { AgentStream } from "@/components/AgentStream";
+import { AgentChatPanel } from "@/components/AgentChatPanel";
 import { SteeringBar } from "@/components/SteeringBar";
 import { TaskList } from "@/components/TaskList";
 import { TaskDetail } from "@/components/TaskDetail";
@@ -28,6 +28,7 @@ import { CelebrationEffects } from "@/components/CelebrationEffects";
 import { GitPanel } from "@/components/GitPanel";
 import { TokenUsageDisplay } from "@/components/TokenUsageDisplay";
 import { AwardsPanel } from "@/components/AwardsPanel";
+import { getAgentVisual } from "@/lib/agent-visuals";
 
 // ─── Stream entry type (UI-only) ──────────────────────────────────────────────
 
@@ -54,6 +55,8 @@ const INITIAL_STATE: PipelineState = {
   status: PIPELINE_STATUSES.IDLE,
   currentCycle: 0,
   activeAgent: null,
+  activeAgents: [],
+  activeDomains: [],
   runId: null,
   tasksSummary: { total: 0, open: 0, inProgress: 0, resolved: 0, deferred: 0 },
 };
@@ -97,6 +100,8 @@ export function Dashboard({ config }: DashboardProps) {
   const [gitOpen, setGitOpen] = useState(false);
   const [pipelineAction, setPipelineAction] = useState<"starting" | "stopping" | null>(null);
   const [showNewProjectConfirm, setShowNewProjectConfirm] = useState(false);
+  const [selectedAgent, setSelectedAgent] = useState<AgentRole | null>(null);
+  const [completedAgents, setCompletedAgents] = useState<AgentRole[]>([]);
 
   const entryCounter = useRef(0);
   // Track the current accumulating message/reasoning entry so deltas merge into one block
@@ -126,7 +131,13 @@ export function Dashboard({ config }: DashboardProps) {
       switch (evt.type) {
         case SESSION_EVENT_TYPES.PIPELINE_STATE_CHANGE: {
           const state = evt.data.state as PipelineState | undefined;
-          if (state) setPipelineState(state);
+          if (state) {
+            setPipelineState(state);
+            // Clear the "starting" action once the pipeline confirms RUNNING
+            if (state.status === PIPELINE_STATUSES.RUNNING) {
+              setPipelineAction(null);
+            }
+          }
           break;
         }
         case SESSION_EVENT_TYPES.AGENT_START: {
@@ -137,6 +148,21 @@ export function Dashboard({ config }: DashboardProps) {
             agent: (evt.agent ?? evt.data.agent) as AgentRole | null,
             type: "system",
             content: `${String(evt.data.agent ?? evt.agent ?? "agent")} started`,
+            timestamp: evt.timestamp,
+          });
+          break;
+        }
+        case SESSION_EVENT_TYPES.AGENT_END: {
+          const endedAgent = (evt.agent ?? evt.data.agent) as AgentRole | null;
+          if (endedAgent) {
+            setCompletedAgents((prev) => prev.includes(endedAgent) ? prev : [...prev, endedAgent]);
+          }
+          const duration = evt.data.durationSeconds as number | undefined;
+          batch.push({
+            id: `se-${entryCounter.current++}`,
+            agent: endedAgent,
+            type: "system",
+            content: `${String(evt.data.agent ?? evt.agent ?? "agent")} finished${duration ? ` (${duration.toFixed(1)}s)` : ""}`,
             timestamp: evt.timestamp,
           });
           break;
@@ -267,6 +293,27 @@ export function Dashboard({ config }: DashboardProps) {
           });
           break;
         }
+        case SESSION_EVENT_TYPES.PIPELINE_CYCLE_START: {
+          setCompletedAgents([]);
+          batch.push({
+            id: `se-${entryCounter.current++}`,
+            agent: null,
+            type: "system",
+            content: `── Cycle ${evt.data.cycle ?? ""} started ──`,
+            timestamp: evt.timestamp,
+          });
+          break;
+        }
+        case SESSION_EVENT_TYPES.PIPELINE_CYCLE_END: {
+          batch.push({
+            id: `se-${entryCounter.current++}`,
+            agent: null,
+            type: "system",
+            content: `── Cycle ${evt.data.cycle ?? ""} complete ──`,
+            timestamp: evt.timestamp,
+          });
+          break;
+        }
       }
     }
 
@@ -324,14 +371,16 @@ export function Dashboard({ config }: DashboardProps) {
 
   const startPipeline = useCallback(async () => {
     setPipelineAction("starting");
+    setCompletedAgents([]);
     try {
-      await fetch("/api/pipeline/start", {
+      const res = await fetch("/api/pipeline/start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(currentConfig),
       });
-    } catch { /* handled via SSE state */ }
-    finally { setPipelineAction(null); }
+      if (!res.ok) setPipelineAction(null);
+    } catch { setPipelineAction(null); }
+    // On success, pipelineAction is cleared when SSE confirms RUNNING state
   }, [currentConfig]);
 
   const stopPipeline = useCallback(async () => {
@@ -344,6 +393,7 @@ export function Dashboard({ config }: DashboardProps) {
           ...prev,
           status: PIPELINE_STATUSES.STOPPED,
           activeAgent: null,
+          activeAgents: [],
         }));
       }
     } catch { /* handled via SSE state */ }
@@ -356,6 +406,7 @@ export function Dashboard({ config }: DashboardProps) {
     activeMessageId.current = null;
     activeReasoningId.current = null;
     setPipelineState(INITIAL_STATE);
+    setCompletedAgents([]);
   }, []);
 
   const handleSteered = useCallback((text: string) => {
@@ -370,6 +421,54 @@ export function Dashboard({ config }: DashboardProps) {
       },
     ]);
   }, [pipelineState.activeAgent]);
+
+  const handleNewVision = useCallback(async (vision: string) => {
+    const updatedConfig = { ...currentConfig, inspiration: vision };
+    setCurrentConfig(updatedConfig);
+
+    // Reset UI state for a fresh run
+    setStreamEntries([]);
+    entryCounter.current = 0;
+    activeMessageId.current = null;
+    activeReasoningId.current = null;
+    setCompletedAgents([]);
+    setTasks([]);
+    setSelectedTask(null);
+    setPipelineState(INITIAL_STATE);
+
+    // Clear sessionStorage celebration badges so they don't persist
+    try { sessionStorage.removeItem("endstate-celebrations-earned"); } catch { /* ignore */ }
+
+    // Save updated config
+    try {
+      await fetch("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updatedConfig),
+      });
+    } catch { /* best effort */ }
+
+    // Log the new vision in stream
+    setStreamEntries([{
+      id: `se-${entryCounter.current++}`,
+      agent: null,
+      type: "system" as const,
+      content: `── New vision: "${vision}" ──`,
+      timestamp: new Date().toISOString(),
+    }]);
+
+    // Start the pipeline with the updated config
+    setPipelineAction("starting");
+    try {
+      const res = await fetch("/api/pipeline/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updatedConfig),
+      });
+      if (!res.ok) setPipelineAction(null);
+    } catch { setPipelineAction(null); }
+    // On success, pipelineAction is cleared when SSE confirms RUNNING state
+  }, [currentConfig]);
 
   return (
     <div className="noise relative flex h-screen flex-col overflow-hidden bg-void">
@@ -395,12 +494,30 @@ export function Dashboard({ config }: DashboardProps) {
 
           <div className="flex items-center gap-2">
             <span className="text-[10px] uppercase tracking-widest text-text-muted">
-              Cycle
+              {pipelineState.currentCycle === 0 && isRunning ? "Setup" : "Cycle"}
             </span>
             <span className="font-mono text-sm font-bold text-text-primary">
-              {pipelineState.currentCycle}
+              {pipelineState.currentCycle === 0 && isRunning ? "" : pipelineState.currentCycle}
             </span>
           </div>
+
+          {/* Active agent indicator */}
+          {isRunning && pipelineState.activeAgent && (() => {
+            const vis = getAgentVisual(pipelineState.activeAgent);
+            return (
+              <div className="flex items-center gap-1.5">
+                <motion.span
+                  animate={{ opacity: [0.4, 1, 0.4] }}
+                  transition={{ repeat: Infinity, duration: 1.5, ease: "easeInOut" }}
+                  className="h-1.5 w-1.5 rounded-full"
+                  style={{ backgroundColor: vis.hex }}
+                />
+                <span className="text-[10px] font-medium" style={{ color: vis.hex }}>
+                  {vis.label}
+                </span>
+              </div>
+            );
+          })()}
 
           <div className="flex items-center gap-1.5">
             {pipelineState.status === PIPELINE_STATUSES.RUNNING ? (
@@ -548,38 +665,26 @@ export function Dashboard({ config }: DashboardProps) {
         </div>
       </header>
 
-      {/* ── Workflow Graph ──────────────────────────────────────────────── */}
-      <div className="relative z-10 shrink-0">
-        <ErrorBoundary fallbackTitle="Workflow Graph Error">
-          <WorkflowGraph
-            activeAgent={pipelineState.activeAgent}
-            cycle={pipelineState.currentCycle}
-            status={pipelineState.status}
-            agentGraph={currentConfig.agentGraph}
-          />
-        </ErrorBoundary>
-      </div>
-
-      {/* ── Token Usage ────────────────────────────────────────────────── */}
-      <div className="relative z-10 shrink-0">
-        <ErrorBoundary fallbackTitle="Token Usage Error">
-          <TokenUsageDisplay activeAgent={pipelineState.activeAgent} isCompacting={isCompacting} />
-        </ErrorBoundary>
-      </div>
-
-      {/* ── Main Content ───────────────────────────────────────────────── */}
+      {/* ── Main Content: Graph (center) + Sidebar (permanent right) ── */}
       <div className="relative z-10 flex min-h-0 flex-1 gap-px">
-        {/* Agent Stream */}
-        <div className="flex-1 overflow-hidden">
-          <ErrorBoundary fallbackTitle="Agent Stream Error">
-            <AgentStream
-              entries={streamEntries}
+        {/* Workflow Graph - center stage */}
+        <div className="flex-1 min-w-0 overflow-hidden">
+          <ErrorBoundary fallbackTitle="Workflow Graph Error">
+            <WorkflowGraph
               activeAgent={pipelineState.activeAgent}
+              activeAgents={pipelineState.activeAgents ?? []}
+              activeDomains={pipelineState.activeDomains ?? []}
+              cycle={pipelineState.currentCycle}
+              status={pipelineState.status}
+              completedAgents={completedAgents}
+              agentGraph={currentConfig.agentGraph}
+              onAgentClick={setSelectedAgent}
+              selectedAgent={selectedAgent}
             />
           </ErrorBoundary>
         </div>
 
-        {/* Sidebar */}
+        {/* Sidebar - permanently visible */}
         <div className="flex w-[360px] shrink-0 flex-col overflow-hidden glass-panel border-t-0 border-b-0 border-r-0">
           {/* Tab bar */}
           <div className="flex shrink-0 border-b border-border-subtle" role="tablist">
@@ -628,14 +733,33 @@ export function Dashboard({ config }: DashboardProps) {
         </div>
       </div>
 
+      {/* ── Token Usage ────────────────────────────────────────────────── */}
+      <div className="relative z-10 shrink-0">
+        <ErrorBoundary fallbackTitle="Token Usage Error">
+          <TokenUsageDisplay activeAgent={pipelineState.activeAgent} isCompacting={isCompacting} />
+        </ErrorBoundary>
+      </div>
+
       {/* ── Steering Bar ───────────────────────────────────────────────── */}
       <div className="relative z-10 shrink-0">
         <ErrorBoundary fallbackTitle="Steering Bar Error">
-          <SteeringBar status={pipelineState.status} onSteered={handleSteered} />
+          <SteeringBar status={pipelineAction === "starting" ? PIPELINE_STATUSES.RUNNING : pipelineState.status} onSteered={handleSteered} onNewVision={handleNewVision} />
         </ErrorBoundary>
       </div>
 
       {/* ── Modals ─────────────────────────────────────────────────────── */}
+      <AnimatePresence>
+        {selectedAgent && (
+          <AgentChatPanel
+            agent={selectedAgent}
+            entries={streamEntries.filter((e) => e.agent === selectedAgent)}
+            isActive={(pipelineState.activeAgents ?? []).includes(selectedAgent) || pipelineState.activeAgent === selectedAgent}
+            isCompleted={false}
+            onClose={() => setSelectedAgent(null)}
+          />
+        )}
+      </AnimatePresence>
+
       <AnimatePresence>
         {selectedTask && (
           <TaskDetail
@@ -713,6 +837,40 @@ export function Dashboard({ config }: DashboardProps) {
                   Continue to Setup
                 </motion.button>
               </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Vision loading overlay ────────────────────────────────────── */}
+      <AnimatePresence>
+        {pipelineAction === "starting" && pipelineState.status !== PIPELINE_STATUSES.RUNNING && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.3 }}
+            className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center bg-void/60 backdrop-blur-sm"
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              transition={{ type: "spring", stiffness: 300, damping: 24 }}
+              className="flex flex-col items-center gap-4"
+            >
+              <div className="relative h-12 w-12">
+                <div className="absolute inset-0 rounded-full border-2 border-border-subtle" />
+                <div className="absolute inset-0 animate-spin rounded-full border-2 border-transparent border-t-accent" />
+              </div>
+              <p className="text-xs uppercase tracking-[0.2em] text-accent">
+                Starting new vision
+              </p>
+              <p className="max-w-xs text-center text-[10px] text-text-muted">
+                {currentConfig.inspiration.length > 80
+                  ? currentConfig.inspiration.slice(0, 80) + "…"
+                  : currentConfig.inspiration}
+              </p>
             </motion.div>
           </motion.div>
         )}

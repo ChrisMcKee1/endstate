@@ -1,12 +1,16 @@
 import { EventEmitter } from "node:events";
 import { v4 as uuid } from "uuid";
 import { createAgentSession } from "@/lib/copilot/agents";
-import { getAllTasks, getTaskCount } from "@/lib/pipeline/task-store";
+import { listModels } from "@/lib/copilot/client";
+import { getAllTasks, getTaskCount, clearAllTasks } from "@/lib/pipeline/task-store";
+import { clearCheatSheet } from "@/lib/pipeline/cheat-sheet-store";
+import { clearAwards } from "@/lib/pipeline/award-store";
 import {
   recordCycleComplete,
   recordAgentTurn,
   recordAgentLatency,
   recordAgentTokens,
+  setModelMaxContextTokens,
 } from "@/lib/otel/metrics";
 import {
   startPipelineCycleSpan,
@@ -49,6 +53,8 @@ let currentState: PipelineState = {
   status: PIPELINE_STATUSES.IDLE,
   currentCycle: 0,
   activeAgent: null,
+  activeAgents: [],
+  activeDomains: [],
   runId: null,
   tasksSummary: { total: 0, open: 0, inProgress: 0, resolved: 0, deferred: 0 },
 };
@@ -115,6 +121,20 @@ function isAgentEnabled(role: AgentRole, config: PipelineConfig): boolean {
       return config.enableAnalyst;
     case AGENT_ROLES.FIXER:
       return config.enableFixer;
+    case AGENT_ROLES.CONSOLIDATOR:
+      return config.enableConsolidator ?? true;
+    case AGENT_ROLES.ANALYST_UI:
+    case AGENT_ROLES.FIXER_UI:
+      return config.enableDomainUI ?? true;
+    case AGENT_ROLES.ANALYST_BACKEND:
+    case AGENT_ROLES.FIXER_BACKEND:
+      return config.enableDomainBackend ?? true;
+    case AGENT_ROLES.ANALYST_DATABASE:
+    case AGENT_ROLES.FIXER_DATABASE:
+      return config.enableDomainDatabase ?? true;
+    case AGENT_ROLES.ANALYST_DOCS:
+    case AGENT_ROLES.FIXER_DOCS:
+      return config.enableDomainDocs ?? true;
     case AGENT_ROLES.UX_REVIEWER:
       return config.enableUxReviewer;
     case AGENT_ROLES.CODE_SIMPLIFIER:
@@ -135,6 +155,9 @@ async function runAgent(
   if (signal.aborted) return;
 
   currentState.activeAgent = role;
+  if (!currentState.activeAgents.includes(role)) {
+    currentState.activeAgents = [...currentState.activeAgents, role];
+  }
   emitStateChange();
 
   broadcast({
@@ -235,8 +258,11 @@ async function runAgent(
         },
       });
 
-      // Convergence check — Analyst gate node
-      if (role === AGENT_ROLES.ANALYST && response?.data?.content) {
+      // Convergence check — gate nodes (Analyst or Consolidator)
+      if (
+        (role === AGENT_ROLES.ANALYST || role === AGENT_ROLES.CONSOLIDATOR) &&
+        response?.data?.content
+      ) {
         const content = response.data.content.toUpperCase();
         if (content.includes("STOP")) {
           currentState.status = PIPELINE_STATUSES.STOPPED;
@@ -259,6 +285,10 @@ async function runAgent(
       },
     });
   }
+
+  // Remove from activeAgents when done
+  currentState.activeAgents = currentState.activeAgents.filter((r) => r !== role);
+  emitStateChange();
 }
 
 // ─── Graph-based execution layer ──────────────────────────────────────────────
@@ -308,8 +338,9 @@ async function executeGraph(
   config: PipelineConfig,
   cycle: number,
   signal: AbortSignal,
+  preCompleted?: Set<AgentRole>,
 ): Promise<void> {
-  const completed = new Set<AgentRole>();
+  const completed = new Set<AgentRole>(preCompleted);
 
   // Mark disabled agents as already completed so they don't block deps
   for (const node of graph) {
@@ -347,9 +378,27 @@ async function runPipeline(config: PipelineConfig): Promise<void> {
   const signal = abortController!.signal;
   const graph = resolveGraph(config);
 
+  // Look up the selected model's context window from SDK metadata
+  try {
+    const models = await listModels();
+    const selected = models.find(
+      (m: { id: string; capabilities?: { limits?: { max_context_window_tokens?: number } } }) =>
+        m.id === config.model,
+    );
+    const maxContext = selected?.capabilities?.limits?.max_context_window_tokens;
+    if (maxContext && maxContext > 0) {
+      setModelMaxContextTokens(maxContext);
+    }
+  } catch {
+    // Non-fatal — bar will use fallback scale
+  }
+
   // Separate entry nodes (run once) from cycle nodes
   const entryNodes = graph.filter((n) => n.nodeType === GRAPH_NODE_TYPES.ENTRY);
   const cycleNodes = graph.filter((n) => n.nodeType !== GRAPH_NODE_TYPES.ENTRY);
+
+  // Collect entry roles so cycle execution knows they already completed
+  const entryRoles = new Set(entryNodes.map((n) => n.role));
 
   // Phase 1: Run entry agents once (e.g., Researcher)
   if (entryNodes.length > 0 && !signal.aborted) {
@@ -370,7 +419,7 @@ async function runPipeline(config: PipelineConfig): Promise<void> {
       data: { cycle },
     });
 
-    await executeGraph(cycleNodes, config, cycle, signal);
+    await executeGraph(cycleNodes, config, cycle, signal, entryRoles);
 
     recordCycleComplete();
     endSpanOk(cycleSpan);
@@ -400,10 +449,17 @@ export function startPipeline(config: PipelineConfig): string {
   const runId = uuid();
   abortController = new AbortController();
 
+  // Clear previous run state: tasks, cheat sheet, awards
+  clearAllTasks();
+  clearCheatSheet(config.projectPath);
+  clearAwards();
+
   currentState = {
     status: PIPELINE_STATUSES.RUNNING,
     currentCycle: 0,
     activeAgent: null,
+    activeAgents: [],
+    activeDomains: [],
     runId,
     tasksSummary: { total: 0, open: 0, inProgress: 0, resolved: 0, deferred: 0 },
   };

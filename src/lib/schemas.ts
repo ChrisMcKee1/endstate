@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { SEVERITIES, AGENT_ROLES, REASONING_EFFORTS, SKILL_SOURCES, MCP_SERVER_TYPES, TOOL_TYPES } from "@/lib/types";
+import { SEVERITIES, AGENT_ROLES, REASONING_EFFORTS, SKILL_SOURCES, MCP_SERVER_TYPES, TOOL_TYPES, DOMAINS } from "@/lib/types";
 
 // ─── Reusable enums ───────────────────────────────────────────────────────────
 
@@ -15,6 +15,15 @@ const agentRoleEnum = z.enum([
   AGENT_ROLES.EXPLORER,
   AGENT_ROLES.ANALYST,
   AGENT_ROLES.FIXER,
+  AGENT_ROLES.ANALYST_UI,
+  AGENT_ROLES.ANALYST_BACKEND,
+  AGENT_ROLES.ANALYST_DATABASE,
+  AGENT_ROLES.ANALYST_DOCS,
+  AGENT_ROLES.FIXER_UI,
+  AGENT_ROLES.FIXER_BACKEND,
+  AGENT_ROLES.FIXER_DATABASE,
+  AGENT_ROLES.FIXER_DOCS,
+  AGENT_ROLES.CONSOLIDATOR,
   AGENT_ROLES.UX_REVIEWER,
   AGENT_ROLES.CODE_SIMPLIFIER,
 ]);
@@ -66,7 +75,25 @@ export const ToolEntrySchema = z.object({
   enabled: z.boolean(),
 });
 
+const domainEnum = z.enum([
+  DOMAINS.UI,
+  DOMAINS.BACKEND,
+  DOMAINS.DATABASE,
+  DOMAINS.DOCS,
+]);
+
 // ─── Pipeline config ──────────────────────────────────────────────────────────
+
+const agentGraphNodeSchema = z.object({
+  role: agentRoleEnum,
+  nodeType: z.enum(["entry", "cycle", "fan-out", "fan-in", "gate", "exit"]),
+  runAfter: z.array(agentRoleEnum),
+  parallel: z.boolean(),
+  enabled: z.boolean(),
+  domain: domainEnum.optional(),
+  handoffTo: agentRoleEnum.optional(),
+  dynamicEnable: z.boolean().optional(),
+});
 
 export const PipelineConfigSchema = z.object({
   projectPath: z.string().min(1),
@@ -83,13 +110,13 @@ export const PipelineConfigSchema = z.object({
   enableUxReviewer: z.boolean(),
   enableResearcher: z.boolean().default(true),
   enableCodeSimplifier: z.boolean().default(true),
-  agentGraph: z.array(z.object({
-    role: agentRoleEnum,
-    nodeType: z.enum(["entry", "cycle", "gate", "exit"]),
-    runAfter: z.array(agentRoleEnum),
-    parallel: z.boolean(),
-    enabled: z.boolean(),
-  })).default([]),
+  enableConsolidator: z.boolean().default(true),
+  enableDomainUI: z.boolean().default(true),
+  enableDomainBackend: z.boolean().default(true),
+  enableDomainDatabase: z.boolean().default(true),
+  enableDomainDocs: z.boolean().default(true),
+  enableWorktreeIsolation: z.boolean().default(true),
+  agentGraph: z.array(agentGraphNodeSchema).default([]),
   reasoningEffort: reasoningEffortEnum.optional(),
   skills: z.array(SkillDefinitionSchema).default([]),
   customAgentDefinitions: z.array(CustomAgentDefinitionSchema).default([]),

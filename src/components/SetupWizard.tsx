@@ -73,13 +73,6 @@ const SEVERITY_FILL: Record<Severity, string> = {
   [SEVERITIES.LOW]: "bg-severity-low text-white",
 };
 
-const AGENT_CONFIGS = [
-  { key: "enableExplorer" as const, label: "Explorer", color: "bg-agent-explorer", glow: "rgba(0,229,255,0.4)" },
-  { key: "enableAnalyst" as const, label: "Analyst", color: "bg-agent-analyst", glow: "rgba(176,38,255,0.4)" },
-  { key: "enableFixer" as const, label: "Fixer", color: "bg-agent-fixer", glow: "rgba(0,255,163,0.4)" },
-  { key: "enableUxReviewer" as const, label: "UX Reviewer", color: "bg-agent-ux", glow: "rgba(255,184,0,0.4)" },
-] as const;
-
 const DEFAULT_CONFIG: PipelineConfig = {
   projectPath: "",
   appUrl: "http://localhost:3000",
@@ -95,6 +88,12 @@ const DEFAULT_CONFIG: PipelineConfig = {
   enableFixer: true,
   enableUxReviewer: true,
   enableCodeSimplifier: true,
+  enableConsolidator: true,
+  enableDomainUI: true,
+  enableDomainBackend: true,
+  enableDomainDatabase: true,
+  enableDomainDocs: true,
+  enableWorktreeIsolation: false,
   agentGraph: [],
   skills: [],
   customAgentDefinitions: [],
@@ -626,19 +625,29 @@ export function SetupWizard() {
                     {/* Agent toggles */}
                     <div>
                       <label className="mb-2 block text-xs text-text-secondary">
-                        Agents
+                        Core Agents
                       </label>
                       <div className="grid grid-cols-2 gap-2">
-                        {AGENT_CONFIGS.map((agent) => (
-                          <AgentToggle
-                            key={agent.key}
-                            label={agent.label}
-                            color={agent.color}
-                            glowColor={agent.glow}
-                            checked={config[agent.key]}
-                            onChange={(v) => update(agent.key, v)}
-                          />
-                        ))}
+                        <AgentToggle label="Explorer" color="bg-agent-explorer" glowColor="rgba(0,229,255,0.4)" checked={config.enableExplorer} onChange={(v) => update("enableExplorer", v)} />
+                        <AgentToggle label="UX Reviewer" color="bg-agent-ux" glowColor="rgba(255,184,0,0.4)" checked={config.enableUxReviewer} onChange={(v) => update("enableUxReviewer", v)} />
+                        <AgentToggle label="Consolidator" color="bg-agent-consolidator" glowColor="rgba(255,215,0,0.4)" checked={config.enableConsolidator} onChange={(v) => update("enableConsolidator", v)} />
+                        <AgentToggle label="Simplifier" color="bg-agent-simplifier" glowColor="rgba(255,105,180,0.4)" checked={config.enableCodeSimplifier} onChange={(v) => update("enableCodeSimplifier", v)} />
+                      </div>
+                    </div>
+
+                    {/* Domain streams */}
+                    <div>
+                      <label className="mb-1 block text-xs text-text-secondary">
+                        Domain Streams
+                      </label>
+                      <p className="mb-2 text-[10px] text-text-muted/60">
+                        Each enables a paired Analyst + Fixer
+                      </p>
+                      <div className="grid grid-cols-2 gap-2">
+                        <AgentToggle label="UI" color="bg-agent-analyst-ui" glowColor="rgba(0,229,255,0.4)" checked={config.enableDomainUI} onChange={(v) => update("enableDomainUI", v)} />
+                        <AgentToggle label="Backend" color="bg-agent-analyst-backend" glowColor="rgba(176,38,255,0.4)" checked={config.enableDomainBackend} onChange={(v) => update("enableDomainBackend", v)} />
+                        <AgentToggle label="Database" color="bg-agent-analyst-database" glowColor="rgba(255,215,0,0.4)" checked={config.enableDomainDatabase} onChange={(v) => update("enableDomainDatabase", v)} />
+                        <AgentToggle label="Docs" color="bg-agent-analyst-docs" glowColor="rgba(255,105,180,0.4)" checked={config.enableDomainDocs} onChange={(v) => update("enableDomainDocs", v)} />
                       </div>
                     </div>
 
@@ -681,30 +690,27 @@ export function SetupWizard() {
                     Configure skills, MCP servers, and tool access before launching. You can fine-tune these later in Settings.
                   </p>
 
-                  <div className="space-y-5">
-                    <div>
-                      <label className="mb-2 block text-xs text-text-secondary">Skills</label>
+                  <div className="space-y-2">
+                    <CollapsibleSection icon="🧩" label="Skills" count={config.skills.length}>
                       <SkillManager
                         skills={config.skills}
                         onChange={(v) => update("skills", v)}
                         projectPath={config.projectPath}
                       />
-                    </div>
-                    <div>
-                      <label className="mb-2 block text-xs text-text-secondary">MCP Servers</label>
+                    </CollapsibleSection>
+                    <CollapsibleSection icon="🔌" label="MCP Servers" count={config.mcpServerOverrides.length}>
                       <McpServerManager
                         servers={config.mcpServerOverrides}
                         onChange={(v) => update("mcpServerOverrides", v)}
                         projectPath={config.projectPath}
                       />
-                    </div>
-                    <div>
-                      <label className="mb-2 block text-xs text-text-secondary">Tool Access</label>
+                    </CollapsibleSection>
+                    <CollapsibleSection icon="🔧" label="Tool Access" count={config.toolOverrides.length}>
                       <ToolManager
                         tools={config.toolOverrides}
                         onChange={(v) => update("toolOverrides", v)}
                       />
-                    </div>
+                    </CollapsibleSection>
                   </div>
                 </div>
               )}
@@ -729,14 +735,29 @@ export function SetupWizard() {
                     <SummaryRow
                       label="Agents"
                       value={[
+                        config.enableResearcher && "Researcher",
                         config.enableExplorer && "Explorer",
-                        config.enableAnalyst && "Analyst",
-                        config.enableFixer && "Fixer",
                         config.enableUxReviewer && "UX",
+                        config.enableCodeSimplifier && "Simplifier",
+                        config.enableConsolidator && "Consolidator",
                       ]
                         .filter(Boolean)
                         .join(", ")}
                     />
+                    <SummaryRow
+                      label="Domains"
+                      value={[
+                        config.enableDomainUI && "UI",
+                        config.enableDomainBackend && "Backend",
+                        config.enableDomainDatabase && "Database",
+                        config.enableDomainDocs && "Docs",
+                      ]
+                        .filter(Boolean)
+                        .join(", ") || "None"}
+                    />
+                    {config.enableWorktreeIsolation && (
+                      <SummaryRow label="Isolation" value="Worktree isolation enabled" />
+                    )}
                     <SummaryRow
                       label="Vision"
                       value={
@@ -874,6 +895,64 @@ function AgentToggle({
       />
       {label}
     </motion.button>
+  );
+}
+
+function CollapsibleSection({
+  icon,
+  label,
+  count,
+  children,
+}: {
+  icon: string;
+  label: string;
+  count: number;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="rounded-xl border border-border-subtle overflow-hidden">
+      <motion.button
+        onClick={() => setOpen((o) => !o)}
+        className="flex w-full items-center gap-2.5 px-4 py-3 text-left transition-colors hover:bg-white/[0.02]"
+        whileTap={{ scale: 0.99 }}
+      >
+        <span className="text-sm">{icon}</span>
+        <span className="flex-1 text-xs font-medium text-text-secondary">{label}</span>
+        {count > 0 && (
+          <span className="rounded-full bg-accent/10 px-2 py-0.5 font-mono text-[10px] text-accent">
+            {count}
+          </span>
+        )}
+        <motion.svg
+          animate={{ rotate: open ? 180 : 0 }}
+          transition={{ type: "spring", stiffness: 300, damping: 20 }}
+          className="h-3.5 w-3.5 text-text-muted"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          strokeWidth={2}
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+        </motion.svg>
+      </motion.button>
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ type: "spring", stiffness: 300, damping: 28 }}
+            className="overflow-hidden"
+          >
+            <div className="border-t border-border-subtle px-4 py-3">
+              {children}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
   );
 }
 

@@ -3,64 +3,8 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { AgentRole } from "@/lib/types";
-import { AGENT_ROLES } from "@/lib/types";
 import type { StreamEntry } from "@/components/Dashboard";
-
-// ─── Agent color map ─────────────────────────────────────────────────────────
-
-const AGENT_COLORS: Record<string, { text: string; bg: string; dot: string; glow: string; gradient: string }> = {
-  [AGENT_ROLES.RESEARCHER]: {
-    text: "text-agent-researcher",
-    bg: "bg-agent-researcher/10",
-    dot: "bg-agent-researcher",
-    glow: "shadow-[0_0_8px_rgba(255,107,107,0.5)]",
-    gradient: "from-agent-researcher/[0.03]",
-  },
-  [AGENT_ROLES.EXPLORER]: {
-    text: "text-agent-explorer",
-    bg: "bg-agent-explorer/10",
-    dot: "bg-agent-explorer",
-    glow: "shadow-[0_0_8px_rgba(0,229,255,0.5)]",
-    gradient: "from-agent-explorer/[0.03]",
-  },
-  [AGENT_ROLES.ANALYST]: {
-    text: "text-agent-analyst",
-    bg: "bg-agent-analyst/10",
-    dot: "bg-agent-analyst",
-    glow: "shadow-[0_0_8px_rgba(176,38,255,0.5)]",
-    gradient: "from-agent-analyst/[0.03]",
-  },
-  [AGENT_ROLES.FIXER]: {
-    text: "text-agent-fixer",
-    bg: "bg-agent-fixer/10",
-    dot: "bg-agent-fixer",
-    glow: "shadow-[0_0_8px_rgba(0,255,163,0.5)]",
-    gradient: "from-agent-fixer/[0.03]",
-  },
-  [AGENT_ROLES.UX_REVIEWER]: {
-    text: "text-agent-ux",
-    bg: "bg-agent-ux/10",
-    dot: "bg-agent-ux",
-    glow: "shadow-[0_0_8px_rgba(255,184,0,0.5)]",
-    gradient: "from-agent-ux/[0.03]",
-  },
-  [AGENT_ROLES.CODE_SIMPLIFIER]: {
-    text: "text-agent-simplifier",
-    bg: "bg-agent-simplifier/10",
-    dot: "bg-agent-simplifier",
-    glow: "shadow-[0_0_8px_rgba(255,105,180,0.5)]",
-    gradient: "from-agent-simplifier/[0.03]",
-  },
-};
-
-const AGENT_LABELS: Record<string, string> = {
-  [AGENT_ROLES.RESEARCHER]: "RESEARCHER",
-  [AGENT_ROLES.EXPLORER]: "EXPLORER",
-  [AGENT_ROLES.ANALYST]: "ANALYST",
-  [AGENT_ROLES.FIXER]: "FIXER",
-  [AGENT_ROLES.UX_REVIEWER]: "UX",
-  [AGENT_ROLES.CODE_SIMPLIFIER]: "SIMPLIFIER",
-};
+import { getAgentVisual } from "@/lib/agent-visuals";
 
 const TYPE_ICONS: Record<StreamEntry["type"], string> = {
   message: "💬",
@@ -172,12 +116,13 @@ export function AgentStream({ entries, activeAgent }: AgentStreamProps) {
 
     return entries.map((entry) => {
       const isUserMessage = entry.type === "system" && entry.content.startsWith("[YOU]");
+      const vis = !isUserMessage && entry.agent ? getAgentVisual(entry.agent) : null;
       const colors = isUserMessage
         ? { text: "text-accent", bg: "bg-accent/10", dot: "bg-accent", glow: "shadow-[0_0_8px_rgba(0,229,255,0.4)]", gradient: "from-accent/[0.04]" }
-        : entry.agent
-          ? AGENT_COLORS[entry.agent]
+        : vis
+          ? { text: vis.text, bg: vis.bgDim, dot: vis.bg, glow: vis.glow, gradient: vis.gradientFrom }
           : { text: "text-text-muted", bg: "bg-overlay", dot: "bg-text-muted", glow: "", gradient: "from-transparent" };
-      const label = isUserMessage ? "YOU" : entry.agent ? AGENT_LABELS[entry.agent] : "SYS";
+      const label = isUserMessage ? "YOU" : vis?.tag ?? "SYS";
       const isToolEntry =
         entry.type === "tool-start" || entry.type === "tool-complete";
       const isExpanded = expandedTools.has(entry.id);

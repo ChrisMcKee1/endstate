@@ -236,3 +236,18 @@ export function patchTask(id: string, patch: { title?: string; severity?: Severi
   writeToDisk(state, task);
   return task;
 }
+
+export function clearAllTasks(projectPath?: string): number {
+  const state = getState(projectPath);
+  loadFromDisk(state);
+  const count = state.tasks.size;
+  for (const [id] of state.tasks) {
+    try {
+      const fp = taskPath(state, id);
+      if (fs.existsSync(fp)) fs.unlinkSync(fp);
+    } catch { /* ignore */ }
+  }
+  state.tasks.clear();
+  state.counter = 0;
+  return count;
+}

@@ -3,18 +3,8 @@
 import { useMemo, useState, useEffect } from "react";
 import { motion, useMotionValue, useSpring } from "framer-motion";
 import type { PipelineState, Task } from "@/lib/types";
-import { AGENT_ROLES, TASK_STATUSES, SEVERITIES } from "@/lib/types";
-
-// ─── Agent color map ─────────────────────────────────────────────────────────
-
-const AGENT_STYLES: Record<string, { label: string; color: string; bg: string }> = {
-  [AGENT_ROLES.RESEARCHER]: { label: "Researcher", color: "text-agent-researcher", bg: "bg-agent-researcher" },
-  [AGENT_ROLES.EXPLORER]: { label: "Explorer", color: "text-agent-explorer", bg: "bg-agent-explorer" },
-  [AGENT_ROLES.ANALYST]: { label: "Analyst", color: "text-agent-analyst", bg: "bg-agent-analyst" },
-  [AGENT_ROLES.FIXER]: { label: "Fixer", color: "text-agent-fixer", bg: "bg-agent-fixer" },
-  [AGENT_ROLES.UX_REVIEWER]: { label: "UX", color: "text-agent-ux", bg: "bg-agent-ux" },
-  [AGENT_ROLES.CODE_SIMPLIFIER]: { label: "Simplifier", color: "text-agent-simplifier", bg: "bg-agent-simplifier" },
-};
+import { TASK_STATUSES, SEVERITIES } from "@/lib/types";
+import { AGENT_VISUALS } from "@/lib/agent-visuals";
 
 interface MetricsSnapshot {
   agentInputTokens?: Record<string, number>;
@@ -202,7 +192,7 @@ export function MetricsBar({ pipelineState, tasks }: MetricsBarProps) {
           </span>
         </div>
         <div className="space-y-2.5">
-          {Object.entries(AGENT_STYLES).map(([role, style]) => {
+          {Object.entries(AGENT_VISUALS).map(([role, vis]) => {
             const input = metrics.agentInputTokens?.[role] ?? 0;
             const output = metrics.agentOutputTokens?.[role] ?? 0;
             const total = input + output;
@@ -212,16 +202,16 @@ export function MetricsBar({ pipelineState, tasks }: MetricsBarProps) {
               <div key={role}>
                 <div className="flex items-center justify-between mb-1">
                   <div className="flex items-center gap-2">
-                    <div className={`h-2 w-2 rounded-full ${style.bg}`} />
-                    <span className="text-[11px] text-text-secondary">{style.label}</span>
+                    <div className={`h-2 w-2 rounded-full ${vis.bg}`} />
+                    <span className="text-[11px] text-text-secondary">{vis.tag}</span>
                   </div>
-                  <span className={`font-mono text-[10px] ${total > 0 ? style.color : "text-text-muted/30"}`}>
+                  <span className={`font-mono text-[10px] ${total > 0 ? vis.text : "text-text-muted/30"}`}>
                     {total > 0 ? formatTokens(total) : "—"}
                   </span>
                 </div>
                 <div className="h-1.5 w-full overflow-hidden rounded-full bg-void/50">
                   <motion.div
-                    className={`h-full rounded-full ${style.bg} opacity-70`}
+                    className={`h-full rounded-full ${vis.bg} opacity-70`}
                     initial={{ width: 0 }}
                     animate={{ width: `${pct}%` }}
                     transition={{ type: "spring", stiffness: 200, damping: 25 }}

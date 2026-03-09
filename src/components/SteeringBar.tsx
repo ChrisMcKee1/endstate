@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect, type FormEvent } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import type { PipelineStatus } from "@/lib/types";
 import { PIPELINE_STATUSES } from "@/lib/types";
 
@@ -13,17 +13,26 @@ const QUICK_CHIPS = [
   { label: "+5 cycles", message: "Increase the remaining cycles by 5" },
 ] as const;
 
+const VISION_CHIPS = [
+  { label: "Bug sweep", message: "Find and fix all bugs, errors, and broken flows." },
+  { label: "Accessibility audit", message: "Audit the entire app for accessibility issues and fix them." },
+  { label: "Performance pass", message: "Optimize performance — reduce load times, fix N+1 queries, lazy-load images." },
+  { label: "Polish & UX", message: "Polish the UI — fix empty states, loading indicators, error messages, and visual consistency." },
+] as const;
+
 interface SteeringBarProps {
   status: PipelineStatus;
   onSteered?: (message: string) => void;
+  onNewVision?: (vision: string) => void;
 }
 
-export function SteeringBar({ status, onSteered }: SteeringBarProps) {
+export function SteeringBar({ status, onSteered, onNewVision }: SteeringBarProps) {
   const [message, setMessage] = useState("");
   const [sending, setSending] = useState(false);
   const [lastSent, setLastSent] = useState<string | null>(null);
 
   const isRunning = status === PIPELINE_STATUSES.RUNNING;
+  const isIdle = !isRunning;
 
   // Auto-dismiss "Sent ✓" after 3 seconds
   useEffect(() => {
@@ -59,22 +68,50 @@ export function SteeringBar({ status, onSteered }: SteeringBarProps) {
     [sending, onSteered],
   );
 
+  const submitVision = useCallback(
+    async (text: string) => {
+      if (!text.trim() || sending) return;
+      setSending(true);
+      setLastSent(null);
+
+      try {
+        onNewVision?.(text.trim());
+        setLastSent(text.trim());
+        setMessage("");
+      } finally {
+        setSending(false);
+      }
+    },
+    [sending, onNewVision],
+  );
+
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
-    send(message);
+    if (isRunning) {
+      send(message);
+    } else {
+      submitVision(message);
+    }
   };
+
+  const chips = isRunning ? QUICK_CHIPS : VISION_CHIPS;
 
   return (
     <div className="glass-panel border-t-0 shadow-[0_-4px_24px_rgba(0,0,0,0.4)]">
       {/* Quick chips */}
       <div className="flex gap-2 overflow-x-auto px-4 pt-3 pb-2">
-        {QUICK_CHIPS.map((chip) => (
+        {!isRunning && (
+          <span className="flex shrink-0 items-center text-[10px] uppercase tracking-widest text-accent/60">
+            Next vision
+          </span>
+        )}
+        {chips.map((chip) => (
           <motion.button
             key={chip.label}
             whileHover={{ scale: 1.04, boxShadow: "0 0 12px rgba(0, 229, 255, 0.15)" }}
             whileTap={{ scale: 0.96 }}
-            onClick={() => send(chip.message)}
-            disabled={sending || !isRunning}
+            onClick={() => isRunning ? send(chip.message) : submitVision(chip.message)}
+            disabled={sending}
             className="shrink-0 rounded-full border border-border-active bg-white/[0.04] px-3.5 py-1.5 text-[11px] font-medium text-text-secondary transition-colors hover:border-accent/30 hover:text-accent disabled:opacity-50"
           >
             {chip.label}
@@ -95,35 +132,42 @@ export function SteeringBar({ status, onSteered }: SteeringBarProps) {
             placeholder={
               isRunning
                 ? "Steer the pipeline — e.g. 'Focus on accessibility'"
-                : "Pipeline is not running"
+                : "Describe your next vision — e.g. 'Add dark mode support and fix all contrast issues'"
             }
-            disabled={!isRunning || sending}
+            disabled={sending}
             className="w-full rounded-full border border-border-active bg-void/60 px-5 py-3 font-mono text-sm text-text-primary placeholder:text-text-muted/40 transition-shadow focus:border-accent/40 focus:shadow-[inset_0_0_20px_rgba(0,229,255,0.06),0_0_16px_rgba(0,229,255,0.08)] focus:outline-none disabled:opacity-30"
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
-                send(message);
+                if (isRunning) send(message); else submitVision(message);
               }
             }}
           />
-          {lastSent && (
-            <motion.span
-              initial={{ opacity: 0, scale: 0.8 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="absolute right-5 top-1/2 -translate-y-1/2 text-[10px] font-medium text-status-live"
-            >
-              Sent ✓
-            </motion.span>
-          )}
+          <AnimatePresence>
+            {lastSent && (
+              <motion.span
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0 }}
+                className="absolute right-5 top-1/2 -translate-y-1/2 text-[10px] font-medium text-status-live"
+              >
+                {isRunning ? "Sent ✓" : "Queued ✓"}
+              </motion.span>
+            )}
+          </AnimatePresence>
         </div>
 
         <motion.button
           type="submit"
-          disabled={!message.trim() || sending || !isRunning}
-          whileHover={{ scale: 1.08, boxShadow: "0 0 20px rgba(0, 229, 255, 0.4)" }}
+          disabled={!message.trim() || sending}
+          whileHover={{ scale: 1.08, boxShadow: isRunning ? "0 0 20px rgba(0, 229, 255, 0.4)" : "0 0 20px rgba(0, 255, 163, 0.4)" }}
           whileTap={{ scale: 0.92 }}
           transition={{ type: "spring", stiffness: 400, damping: 17 }}
-          className="flex h-11 w-11 items-center justify-center rounded-full bg-accent/15 text-accent transition-colors hover:bg-accent/25 disabled:opacity-20"
+          className={`flex h-11 w-11 items-center justify-center rounded-full transition-colors disabled:opacity-20 ${
+            isRunning
+              ? "bg-accent/15 text-accent hover:bg-accent/25"
+              : "bg-status-live/15 text-status-live hover:bg-status-live/25"
+          }`}
         >
           {sending ? (
             <motion.div
@@ -131,7 +175,7 @@ export function SteeringBar({ status, onSteered }: SteeringBarProps) {
               transition={{ repeat: Infinity, duration: 0.8, ease: "linear" }}
               className="h-4 w-4 rounded-full border-2 border-transparent border-t-accent"
             />
-          ) : (
+          ) : isRunning ? (
             <svg
               className="h-4 w-4"
               fill="none"
@@ -144,6 +188,10 @@ export function SteeringBar({ status, onSteered }: SteeringBarProps) {
                 strokeLinejoin="round"
                 d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5"
               />
+            </svg>
+          ) : (
+            <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
+              <polygon points="6,4 20,12 6,20" />
             </svg>
           )}
         </motion.button>

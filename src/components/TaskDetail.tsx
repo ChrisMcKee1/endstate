@@ -3,8 +3,9 @@
 import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { Task, TaskEvent } from "@/lib/types";
-import { SEVERITIES, AGENT_ROLES } from "@/lib/types";
+import { SEVERITIES } from "@/lib/types";
 import { FileDiffPreview } from "@/components/FileDiffPreview";
+import { getAgentVisual } from "@/lib/agent-visuals";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -13,27 +14,6 @@ const SEVERITY_STYLES: Record<string, string> = {
   [SEVERITIES.HIGH]: "bg-severity-high/15 text-severity-high border-severity-high/30",
   [SEVERITIES.MEDIUM]: "bg-severity-medium/15 text-severity-medium border-severity-medium/30",
   [SEVERITIES.LOW]: "bg-severity-low/15 text-severity-low border-severity-low/30",
-};
-
-const AGENT_COLORS: Record<string, string> = {
-  [AGENT_ROLES.EXPLORER]: "border-agent-explorer bg-agent-explorer",
-  [AGENT_ROLES.ANALYST]: "border-agent-analyst bg-agent-analyst",
-  [AGENT_ROLES.FIXER]: "border-agent-fixer bg-agent-fixer",
-  [AGENT_ROLES.UX_REVIEWER]: "border-agent-ux bg-agent-ux",
-};
-
-const AGENT_DOT_GLOWS: Record<string, string> = {
-  [AGENT_ROLES.EXPLORER]: "shadow-[0_0_8px_rgba(0,229,255,0.5)]",
-  [AGENT_ROLES.ANALYST]: "shadow-[0_0_8px_rgba(176,38,255,0.5)]",
-  [AGENT_ROLES.FIXER]: "shadow-[0_0_8px_rgba(0,255,163,0.5)]",
-  [AGENT_ROLES.UX_REVIEWER]: "shadow-[0_0_8px_rgba(255,184,0,0.5)]",
-};
-
-const AGENT_LABELS: Record<string, string> = {
-  [AGENT_ROLES.EXPLORER]: "Explorer",
-  [AGENT_ROLES.ANALYST]: "Analyst",
-  [AGENT_ROLES.FIXER]: "Fixer",
-  [AGENT_ROLES.UX_REVIEWER]: "UX Reviewer",
 };
 
 const ACTION_LABELS: Record<string, string> = {
@@ -225,10 +205,9 @@ export function TaskDetail({ task, onClose }: TaskDetailProps) {
               >
                 {task.timeline.map((event: TaskEvent, idx: number) => {
                   const isExpanded = expandedEvents.has(idx);
-                  const agentColor =
-                    AGENT_COLORS[event.agent] ?? "border-text-muted bg-text-muted";
-                  const dotGlow =
-                    AGENT_DOT_GLOWS[event.agent] ?? "";
+                  const vis = getAgentVisual(event.agent);
+                  const agentColor = `${vis.border} ${vis.bg}`;
+                  const dotGlow = vis.glow;
 
                   return (
                     <motion.div
@@ -252,7 +231,7 @@ export function TaskDetail({ task, onClose }: TaskDetailProps) {
                       >
                         <div className="flex items-center gap-2">
                           <span className="text-xs font-medium text-text-primary">
-                            {AGENT_LABELS[event.agent] ?? event.agent}
+                            {vis.label}
                           </span>
                           <span className="rounded-full bg-overlay px-1.5 py-0.5 text-[10px] text-text-secondary">
                             {ACTION_LABELS[event.action] ?? event.action}

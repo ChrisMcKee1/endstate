@@ -6,6 +6,7 @@ import type { PipelineConfig, Severity } from "@/lib/types";
 import { SEVERITIES } from "@/lib/types";
 import { ModelSelector } from "@/components/ModelSelector";
 import { CustomizationPanel } from "@/components/CustomizationPanel";
+import { ProjectManager } from "@/components/ProjectManager";
 import { useTheme, ALL_THEMES, THEME_META } from "@/components/ThemeProvider";
 import type { Theme } from "@/components/ThemeProvider";
 
@@ -25,11 +26,12 @@ const SEVERITY_FILL: Record<Severity, string> = {
 
 const SPRING = { type: "spring" as const, stiffness: 400, damping: 28 };
 
-const TABS = ["settings", "customizations"] as const;
+const TABS = ["settings", "customizations", "projects"] as const;
 type TabView = (typeof TABS)[number];
 const TAB_LABELS: Record<TabView, string> = {
   settings: "Pipeline",
   customizations: "Customizations",
+  projects: "Projects",
 };
 
 interface SettingsPanelProps {
@@ -43,7 +45,7 @@ export function SettingsPanel({ config, onClose, onSave }: SettingsPanelProps) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<TabView>("settings");
-  const tabRefs = useRef<Record<TabView, HTMLButtonElement | null>>({ settings: null, customizations: null });
+  const tabRefs = useRef<Record<TabView, HTMLButtonElement | null>>({ settings: null, customizations: null, projects: null });
   const [indicatorStyle, setIndicatorStyle] = useState({ left: 0, width: 0 });
 
   // Update tab indicator position
@@ -164,7 +166,11 @@ export function SettingsPanel({ config, onClose, onSave }: SettingsPanelProps) {
           </div>
 
           {/* Content */}
-          {view === "customizations" ? (
+          {view === "projects" ? (
+            <div className="flex-1 overflow-y-auto p-4">
+              <ProjectManager />
+            </div>
+          ) : view === "customizations" ? (
             <CustomizationPanel
               skills={draft.skills}
               customAgents={draft.customAgentDefinitions}
@@ -238,41 +244,9 @@ export function SettingsPanel({ config, onClose, onSave }: SettingsPanelProps) {
             {/* Agent toggles */}
             <div className="glass-panel rounded-xl p-4">
               <label className="mb-3 block text-[10px] uppercase tracking-widest text-text-muted">
-                Agents
+                Core Agents
               </label>
               <div className="space-y-2">
-                <ToggleRow
-                  label="Explorer"
-                  description="Navigate and test the running app"
-                  checked={draft.enableExplorer}
-                  onChange={(v) => update("enableExplorer", v)}
-                  color="bg-agent-explorer"
-                  glowColor="rgba(0,229,255,0.3)"
-                />
-                <ToggleRow
-                  label="Analyst"
-                  description="Cross-reference findings with code"
-                  checked={draft.enableAnalyst}
-                  onChange={(v) => update("enableAnalyst", v)}
-                  color="bg-agent-analyst"
-                  glowColor="rgba(176,38,255,0.3)"
-                />
-                <ToggleRow
-                  label="Fixer"
-                  description="Apply fixes and verify builds"
-                  checked={draft.enableFixer}
-                  onChange={(v) => update("enableFixer", v)}
-                  color="bg-agent-fixer"
-                  glowColor="rgba(0,255,163,0.3)"
-                />
-                <ToggleRow
-                  label="UX Reviewer"
-                  description="Evaluate from user perspective"
-                  checked={draft.enableUxReviewer}
-                  onChange={(v) => update("enableUxReviewer", v)}
-                  color="bg-agent-ux"
-                  glowColor="rgba(255,184,0,0.3)"
-                />
                 <ToggleRow
                   label="Researcher"
                   description="One-time project discovery at pipeline start"
@@ -282,6 +256,22 @@ export function SettingsPanel({ config, onClose, onSave }: SettingsPanelProps) {
                   glowColor="rgba(255,107,107,0.3)"
                 />
                 <ToggleRow
+                  label="Explorer"
+                  description="Navigate and test the running app"
+                  checked={draft.enableExplorer}
+                  onChange={(v) => update("enableExplorer", v)}
+                  color="bg-agent-explorer"
+                  glowColor="rgba(0,229,255,0.3)"
+                />
+                <ToggleRow
+                  label="Consolidator"
+                  description="Merge worktree changes and verify combined build"
+                  checked={draft.enableConsolidator}
+                  onChange={(v) => update("enableConsolidator", v)}
+                  color="bg-agent-consolidator"
+                  glowColor="rgba(255,215,0,0.3)"
+                />
+                <ToggleRow
                   label="Code Simplifier"
                   description="Review and simplify code changes each cycle"
                   checked={draft.enableCodeSimplifier}
@@ -289,7 +279,74 @@ export function SettingsPanel({ config, onClose, onSave }: SettingsPanelProps) {
                   color="bg-agent-simplifier"
                   glowColor="rgba(255,105,180,0.3)"
                 />
+                <ToggleRow
+                  label="UX Reviewer"
+                  description="Evaluate from user perspective"
+                  checked={draft.enableUxReviewer}
+                  onChange={(v) => update("enableUxReviewer", v)}
+                  color="bg-agent-ux"
+                  glowColor="rgba(255,184,0,0.3)"
+                />
               </div>
+            </div>
+
+            {/* Domain stream toggles */}
+            <div className="glass-panel rounded-xl p-4">
+              <label className="mb-1 block text-[10px] uppercase tracking-widest text-text-muted">
+                Domain Streams
+              </label>
+              <p className="mb-3 text-[9px] text-text-muted/60">
+                Each domain enables a paired Analyst + Fixer agent
+              </p>
+              <div className="space-y-2">
+                <ToggleRow
+                  label="UI / Frontend"
+                  description="Analyse and fix UI components, styles, accessibility"
+                  checked={draft.enableDomainUI}
+                  onChange={(v) => update("enableDomainUI", v)}
+                  color="bg-agent-analyst-ui"
+                  glowColor="rgba(0,229,255,0.3)"
+                />
+                <ToggleRow
+                  label="Backend / API"
+                  description="Analyse and fix server routes, business logic, auth"
+                  checked={draft.enableDomainBackend}
+                  onChange={(v) => update("enableDomainBackend", v)}
+                  color="bg-agent-analyst-backend"
+                  glowColor="rgba(176,38,255,0.3)"
+                />
+                <ToggleRow
+                  label="Database"
+                  description="Analyse and fix schemas, queries, migrations"
+                  checked={draft.enableDomainDatabase}
+                  onChange={(v) => update("enableDomainDatabase", v)}
+                  color="bg-agent-analyst-database"
+                  glowColor="rgba(255,215,0,0.3)"
+                />
+                <ToggleRow
+                  label="Documentation"
+                  description="Analyse and fix docs, README, API specs"
+                  checked={draft.enableDomainDocs}
+                  onChange={(v) => update("enableDomainDocs", v)}
+                  color="bg-agent-analyst-docs"
+                  glowColor="rgba(255,105,180,0.3)"
+                />
+              </div>
+            </div>
+
+            {/* Worktree isolation */}
+            <div className="glass-panel rounded-xl p-4">
+              <label className="mb-3 block text-[10px] uppercase tracking-widest text-text-muted">
+                Isolation
+              </label>
+              <ToggleRow
+                label="Worktree Isolation"
+                description="Run each domain fixer in its own git worktree"
+                checked={draft.enableWorktreeIsolation}
+                onChange={(v) => update("enableWorktreeIsolation", v)}
+                color="bg-accent"
+                glowColor="rgba(0,229,255,0.3)"
+              />
             </div>
 
             {/* Auto-approve & Infinite sessions */}

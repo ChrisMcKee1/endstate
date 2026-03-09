@@ -24,11 +24,81 @@ export const AGENT_ROLES = {
   EXPLORER: "explorer",
   ANALYST: "analyst",
   FIXER: "fixer",
+  ANALYST_UI: "analyst-ui",
+  ANALYST_BACKEND: "analyst-backend",
+  ANALYST_DATABASE: "analyst-database",
+  ANALYST_DOCS: "analyst-docs",
+  FIXER_UI: "fixer-ui",
+  FIXER_BACKEND: "fixer-backend",
+  FIXER_DATABASE: "fixer-database",
+  FIXER_DOCS: "fixer-docs",
+  CONSOLIDATOR: "consolidator",
   UX_REVIEWER: "ux-reviewer",
   CODE_SIMPLIFIER: "code-simplifier",
 } as const;
 
 export type AgentRole = (typeof AGENT_ROLES)[keyof typeof AGENT_ROLES];
+
+export const DOMAINS = {
+  UI: "ui",
+  BACKEND: "backend",
+  DATABASE: "database",
+  DOCS: "docs",
+} as const;
+
+export type Domain = (typeof DOMAINS)[keyof typeof DOMAINS];
+
+const DOMAIN_ANALYST_MAP: Record<Domain, AgentRole> = {
+  [DOMAINS.UI]: AGENT_ROLES.ANALYST_UI,
+  [DOMAINS.BACKEND]: AGENT_ROLES.ANALYST_BACKEND,
+  [DOMAINS.DATABASE]: AGENT_ROLES.ANALYST_DATABASE,
+  [DOMAINS.DOCS]: AGENT_ROLES.ANALYST_DOCS,
+};
+
+const DOMAIN_FIXER_MAP: Record<Domain, AgentRole> = {
+  [DOMAINS.UI]: AGENT_ROLES.FIXER_UI,
+  [DOMAINS.BACKEND]: AGENT_ROLES.FIXER_BACKEND,
+  [DOMAINS.DATABASE]: AGENT_ROLES.FIXER_DATABASE,
+  [DOMAINS.DOCS]: AGENT_ROLES.FIXER_DOCS,
+};
+
+const ROLE_TO_DOMAIN: Partial<Record<AgentRole, Domain>> = {
+  [AGENT_ROLES.ANALYST_UI]: DOMAINS.UI,
+  [AGENT_ROLES.FIXER_UI]: DOMAINS.UI,
+  [AGENT_ROLES.ANALYST_BACKEND]: DOMAINS.BACKEND,
+  [AGENT_ROLES.FIXER_BACKEND]: DOMAINS.BACKEND,
+  [AGENT_ROLES.ANALYST_DATABASE]: DOMAINS.DATABASE,
+  [AGENT_ROLES.FIXER_DATABASE]: DOMAINS.DATABASE,
+  [AGENT_ROLES.ANALYST_DOCS]: DOMAINS.DOCS,
+  [AGENT_ROLES.FIXER_DOCS]: DOMAINS.DOCS,
+};
+
+export function getDomainFromRole(role: AgentRole): Domain | null {
+  return ROLE_TO_DOMAIN[role] ?? null;
+}
+
+export function isAnalystRole(role: AgentRole): boolean {
+  return role.startsWith("analyst-");
+}
+
+export function isFixerRole(role: AgentRole): boolean {
+  return role.startsWith("fixer-");
+}
+
+export function getAnalystForDomain(domain: Domain): AgentRole {
+  return DOMAIN_ANALYST_MAP[domain];
+}
+
+export function getFixerForDomain(domain: Domain): AgentRole {
+  return DOMAIN_FIXER_MAP[domain];
+}
+
+export function getDomainRoles(domain: Domain): { analyst: AgentRole; fixer: AgentRole } {
+  return {
+    analyst: DOMAIN_ANALYST_MAP[domain],
+    fixer: DOMAIN_FIXER_MAP[domain],
+  };
+}
 
 export const TASK_ACTIONS = {
   DISCOVERED: "discovered",
@@ -124,7 +194,13 @@ export interface PipelineConfig {
   enableUxReviewer: boolean;
   enableResearcher: boolean;
   enableCodeSimplifier: boolean;
-  /** Agent execution graph — defines run order, parallelization, and loop-back */
+  enableConsolidator: boolean;
+  enableDomainUI: boolean;
+  enableDomainBackend: boolean;
+  enableDomainDatabase: boolean;
+  enableDomainDocs: boolean;
+  enableWorktreeIsolation: boolean;
+  /** Agent execution graph: defines run order, parallelization, and loop-back */
   agentGraph: AgentGraphNode[];
   reasoningEffort?: ReasoningEffort;
   skills: SkillDefinition[];
@@ -137,7 +213,10 @@ export interface PipelineState {
   status: PipelineStatus;
   currentCycle: number;
   activeAgent: AgentRole | null;
+  activeAgents: AgentRole[];
+  activeDomains: Domain[];
   runId: string | null;
+  researcherCheatSheet?: string;
   tasksSummary: {
     total: number;
     open: number;
@@ -167,7 +246,11 @@ export const GRAPH_NODE_TYPES = {
   ENTRY: "entry",
   /** Standard node in the cycle loop */
   CYCLE: "cycle",
-  /** Convergence gate — decides CONTINUE/STOP */
+  /** Fan-out point: downstream domain nodes run in parallel */
+  FAN_OUT: "fan-out",
+  /** Fan-in point: waits for all parallel domain streams to complete */
+  FAN_IN: "fan-in",
+  /** Convergence gate: decides CONTINUE/STOP */
   GATE: "gate",
   /** Always-last node before loop-back */
   EXIT: "exit",
@@ -187,10 +270,28 @@ export interface AgentGraphNode {
   parallel: boolean;
   /** Whether this agent is enabled */
   enabled: boolean;
+  /** Domain scope for analyst/fixer pairs */
+  domain?: Domain;
+  /** Role this node hands off to (analyst -> fixer chain) */
+  handoffTo?: AgentRole;
+  /** Whether this node's enablement is determined dynamically per cycle by the Explorer */
+  dynamicEnable?: boolean;
 }
 
-/** Default pipeline graph — Researcher → [Explorer, Fixer, UX Reviewer] → Analyst → Code Simplifier → loop */
+/**
+ * Default pipeline graph:
+ * Researcher (entry)
+ *   → Explorer (fan-out, identifies active domains)
+ *     → [Analyst-UI → Fixer-UI]     \
+ *     → [Analyst-Backend → Fixer-Backend]  } parallel, dynamically enabled
+ *     → [Analyst-Database → Fixer-Database]  /
+ *     → [Analyst-Docs → Fixer-Docs]   /
+ *   → Consolidator (fan-in, merges worktrees, CONTINUE/STOP gate)
+ *   → Code Simplifier
+ *   → UX Reviewer (exit, loops back to Explorer)
+ */
 export const DEFAULT_AGENT_GRAPH: AgentGraphNode[] = [
+  // Entry: Researcher runs once
   {
     role: AGENT_ROLES.RESEARCHER,
     nodeType: GRAPH_NODE_TYPES.ENTRY,
@@ -198,38 +299,120 @@ export const DEFAULT_AGENT_GRAPH: AgentGraphNode[] = [
     parallel: false,
     enabled: true,
   },
+  // Fan-out: Explorer identifies which domains need work
   {
     role: AGENT_ROLES.EXPLORER,
-    nodeType: GRAPH_NODE_TYPES.CYCLE,
+    nodeType: GRAPH_NODE_TYPES.FAN_OUT,
     runAfter: [AGENT_ROLES.RESEARCHER],
-    parallel: true,
-    enabled: true,
-  },
-  {
-    role: AGENT_ROLES.FIXER,
-    nodeType: GRAPH_NODE_TYPES.CYCLE,
-    runAfter: [AGENT_ROLES.RESEARCHER],
-    parallel: true,
-    enabled: true,
-  },
-  {
-    role: AGENT_ROLES.UX_REVIEWER,
-    nodeType: GRAPH_NODE_TYPES.CYCLE,
-    runAfter: [AGENT_ROLES.RESEARCHER],
-    parallel: true,
-    enabled: true,
-  },
-  {
-    role: AGENT_ROLES.ANALYST,
-    nodeType: GRAPH_NODE_TYPES.GATE,
-    runAfter: [AGENT_ROLES.EXPLORER, AGENT_ROLES.FIXER, AGENT_ROLES.UX_REVIEWER],
     parallel: false,
     enabled: true,
   },
+  // Domain: UI stream
+  {
+    role: AGENT_ROLES.ANALYST_UI,
+    nodeType: GRAPH_NODE_TYPES.CYCLE,
+    runAfter: [AGENT_ROLES.EXPLORER],
+    parallel: true,
+    enabled: true,
+    domain: DOMAINS.UI,
+    handoffTo: AGENT_ROLES.FIXER_UI,
+    dynamicEnable: true,
+  },
+  {
+    role: AGENT_ROLES.FIXER_UI,
+    nodeType: GRAPH_NODE_TYPES.CYCLE,
+    runAfter: [AGENT_ROLES.ANALYST_UI],
+    parallel: false,
+    enabled: true,
+    domain: DOMAINS.UI,
+    dynamicEnable: true,
+  },
+  // Domain: Backend stream
+  {
+    role: AGENT_ROLES.ANALYST_BACKEND,
+    nodeType: GRAPH_NODE_TYPES.CYCLE,
+    runAfter: [AGENT_ROLES.EXPLORER],
+    parallel: true,
+    enabled: true,
+    domain: DOMAINS.BACKEND,
+    handoffTo: AGENT_ROLES.FIXER_BACKEND,
+    dynamicEnable: true,
+  },
+  {
+    role: AGENT_ROLES.FIXER_BACKEND,
+    nodeType: GRAPH_NODE_TYPES.CYCLE,
+    runAfter: [AGENT_ROLES.ANALYST_BACKEND],
+    parallel: false,
+    enabled: true,
+    domain: DOMAINS.BACKEND,
+    dynamicEnable: true,
+  },
+  // Domain: Database stream
+  {
+    role: AGENT_ROLES.ANALYST_DATABASE,
+    nodeType: GRAPH_NODE_TYPES.CYCLE,
+    runAfter: [AGENT_ROLES.EXPLORER],
+    parallel: true,
+    enabled: true,
+    domain: DOMAINS.DATABASE,
+    handoffTo: AGENT_ROLES.FIXER_DATABASE,
+    dynamicEnable: true,
+  },
+  {
+    role: AGENT_ROLES.FIXER_DATABASE,
+    nodeType: GRAPH_NODE_TYPES.CYCLE,
+    runAfter: [AGENT_ROLES.ANALYST_DATABASE],
+    parallel: false,
+    enabled: true,
+    domain: DOMAINS.DATABASE,
+    dynamicEnable: true,
+  },
+  // Domain: Docs stream
+  {
+    role: AGENT_ROLES.ANALYST_DOCS,
+    nodeType: GRAPH_NODE_TYPES.CYCLE,
+    runAfter: [AGENT_ROLES.EXPLORER],
+    parallel: true,
+    enabled: true,
+    domain: DOMAINS.DOCS,
+    handoffTo: AGENT_ROLES.FIXER_DOCS,
+    dynamicEnable: true,
+  },
+  {
+    role: AGENT_ROLES.FIXER_DOCS,
+    nodeType: GRAPH_NODE_TYPES.CYCLE,
+    runAfter: [AGENT_ROLES.ANALYST_DOCS],
+    parallel: false,
+    enabled: true,
+    domain: DOMAINS.DOCS,
+    dynamicEnable: true,
+  },
+  // Fan-in: Consolidator merges worktrees and decides CONTINUE/STOP
+  {
+    role: AGENT_ROLES.CONSOLIDATOR,
+    nodeType: GRAPH_NODE_TYPES.GATE,
+    runAfter: [
+      AGENT_ROLES.FIXER_UI,
+      AGENT_ROLES.FIXER_BACKEND,
+      AGENT_ROLES.FIXER_DATABASE,
+      AGENT_ROLES.FIXER_DOCS,
+    ],
+    parallel: false,
+    enabled: true,
+  },
+  // Post-merge: Code Simplifier
   {
     role: AGENT_ROLES.CODE_SIMPLIFIER,
+    nodeType: GRAPH_NODE_TYPES.CYCLE,
+    runAfter: [AGENT_ROLES.CONSOLIDATOR],
+    parallel: false,
+    enabled: true,
+  },
+  // Exit: UX Reviewer is last before loop-back to Explorer
+  {
+    role: AGENT_ROLES.UX_REVIEWER,
     nodeType: GRAPH_NODE_TYPES.EXIT,
-    runAfter: [AGENT_ROLES.ANALYST],
+    runAfter: [AGENT_ROLES.CODE_SIMPLIFIER],
     parallel: false,
     enabled: true,
   },

@@ -5,6 +5,10 @@ import { z } from "zod";
 import { detectProjectSkills } from "@/lib/pipeline/skill-manager";
 import { detectProjectMcpServers } from "@/lib/pipeline/mcp-manager";
 import {
+  projectConfigPath,
+  ensureProjectDir,
+} from "@/lib/pipeline/project-resolver";
+import {
   SkillDefinitionSchema,
   CustomAgentDefinitionSchema,
   McpServerEntrySchema,
@@ -37,6 +41,13 @@ const CustomizationSaveSchema = z.object({
 function loadConfigFile(
   projectPath: string
 ): Record<string, unknown> | null {
+  // Prefer .projects/<slug>/config.json, fall back to target project's .agentic-dev.json
+  const localCopy = projectConfigPath(projectPath);
+  if (fs.existsSync(localCopy)) {
+    try {
+      return JSON.parse(fs.readFileSync(localCopy, "utf-8")) as Record<string, unknown>;
+    } catch { /* fall through */ }
+  }
   const fp = path.join(projectPath, CONFIG_FILENAME);
   if (!fs.existsSync(fp)) return null;
   try {
@@ -50,6 +61,12 @@ function saveConfigFile(
   projectPath: string,
   config: Record<string, unknown>
 ): void {
+  // Write to .projects/<slug>/config.json
+  ensureProjectDir(projectPath);
+  const localCopy = projectConfigPath(projectPath);
+  fs.writeFileSync(localCopy, JSON.stringify(config, null, 2), "utf-8");
+
+  // Also write to target project's .agentic-dev.json
   const fp = path.join(projectPath, CONFIG_FILENAME);
   fs.writeFileSync(fp, JSON.stringify(config, null, 2), "utf-8");
 }

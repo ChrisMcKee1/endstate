@@ -30,7 +30,8 @@ You own everything in these paths:
 | `src/lib/copilot/tools.ts` | Custom tool definitions via `defineTool` + `zod` schemas |
 | `src/lib/copilot/instructions/` | Markdown system prompts per agent role (Explorer, Analyst, Fixer, UX Reviewer) |
 | `src/lib/pipeline/orchestrator.ts` | Feedback loop: Explorer → Analyst → Fixer → UX Reviewer → convergence check |
-| `src/lib/pipeline/task-store.ts` | In-memory task store with JSON file persistence to `data/tasks/` |
+| `src/lib/pipeline/task-store.ts` | In-memory task store with JSON file persistence to `.projects/<slug>/tasks/` |
+| `src/lib/pipeline/project-resolver.ts` | Project slug derivation, path helpers, active project tracking, legacy migration |
 | `src/lib/pipeline/steering.ts` | Steering queue — developer messages injected via `onUserPromptSubmitted` hook |
 | `src/lib/otel/setup.ts` | OpenTelemetry SDK initialization (traces + metrics) |
 | `src/lib/otel/spans.ts` | Span helpers for agent turns, tool calls, task mutations, compaction events |
@@ -40,7 +41,7 @@ You own everything in these paths:
 | `src/app/api/models/route.ts` | Model listing from `client.listModels()` |
 | `src/app/api/tasks/route.ts` | Task CRUD |
 | `src/app/api/settings/route.ts` | Pipeline config persistence |
-| `data/tasks/` | Persisted task JSON files |
+| `.projects/` | Per-project data (tasks, config) — gitignored |
 
 ## SDK Patterns
 
@@ -98,7 +99,7 @@ export const checkHealth = defineTool("check_app_health", {
 | UX Reviewer | `playwright` (Playwright MCP) |
 
 ### Task Data Model
-Tasks are the central data structure. Every finding, fix, and evaluation is a `TaskEvent` appended to a task's timeline. Tasks persist to `data/tasks/{task-id}.json`. Agents receive a JSON summary and add timeline entries — they don't pass raw strings.
+Tasks are the central data structure. Every finding, fix, and evaluation is a `TaskEvent` appended to a task's timeline. Tasks persist to `.projects/<slug>/tasks/{task-id}.json`. Agents receive a JSON summary and add timeline entries — they don't pass raw strings.
 
 ### SSE Streaming
 All 40+ session event types forward to the frontend via SSE from `/api/pipeline/stream` using `ReadableStream`. Key events: `assistant.message_delta`, `tool.execution_start/complete`, `session.idle`, `session.compaction_start/complete`.
@@ -129,8 +130,9 @@ After each cycle, the Analyst decides CONTINUE or STOP based on unresolved CRITI
 - No WebSockets — SSE only.
 
 ### Persistence
-- Task store: in-memory + JSON to `data/tasks/{task-id}.json`.
-- Pipeline config: `.agentic-dev.json` in target project root.
+- Task store: in-memory + JSON to `.projects/<slug>/tasks/{task-id}.json`.
+- Pipeline config: `.projects/<slug>/config.json` (mirrored to `.agentic-dev.json` in target project root).
+- Project resolution: `src/lib/pipeline/project-resolver.ts` handles slugging, active tracking, legacy migration.
 - No database. No ORM.
 - Never store secrets in persisted JSON.
 

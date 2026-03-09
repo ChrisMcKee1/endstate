@@ -110,6 +110,7 @@ export interface MetricsSnapshot {
   buildsPass: number;
   buildsFail: number;
   uxScores: Record<string, number>;
+  modelMaxContextTokens: number;
 }
 
 const snapshot: MetricsSnapshot = {
@@ -125,6 +126,7 @@ const snapshot: MetricsSnapshot = {
   buildsPass: 0,
   buildsFail: 0,
   uxScores: {},
+  modelMaxContextTokens: 0,
 };
 
 export function getMetricsSnapshot(): MetricsSnapshot {
@@ -176,6 +178,10 @@ export function recordToolInvocation(tool: string): void {
 export function recordContextUsage(usage: number): void {
   snapshot.contextUsage = usage;
   sessionContextUsage.record(usage);
+}
+
+export function setModelMaxContextTokens(tokens: number): void {
+  snapshot.modelMaxContextTokens = tokens;
 }
 
 export function recordCompaction(): void {

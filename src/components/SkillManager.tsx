@@ -4,17 +4,9 @@ import { useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { SkillDefinition, AgentRole } from "@/lib/types";
 import { AGENT_ROLES } from "@/lib/types";
+import { getAgentVisual } from "@/lib/agent-visuals";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-
-const AGENT_COLOR_MAP: Record<AgentRole, { bg: string; text: string; label: string }> = {
-  [AGENT_ROLES.RESEARCHER]: { bg: "bg-agent-researcher/20", text: "text-agent-researcher", label: "Researcher" },
-  [AGENT_ROLES.EXPLORER]: { bg: "bg-agent-explorer/20", text: "text-agent-explorer", label: "Explorer" },
-  [AGENT_ROLES.ANALYST]: { bg: "bg-agent-analyst/20", text: "text-agent-analyst", label: "Analyst" },
-  [AGENT_ROLES.FIXER]: { bg: "bg-agent-fixer/20", text: "text-agent-fixer", label: "Fixer" },
-  [AGENT_ROLES.UX_REVIEWER]: { bg: "bg-agent-ux/20", text: "text-agent-ux", label: "UX" },
-  [AGENT_ROLES.CODE_SIMPLIFIER]: { bg: "bg-agent-simplifier/20", text: "text-agent-simplifier", label: "Simplifier" },
-};
 
 const ALL_ROLES = Object.values(AGENT_ROLES);
 const SPRING = { type: "spring" as const, stiffness: 300, damping: 26 };
@@ -213,7 +205,7 @@ export function SkillManager({ skills, onChange, projectPath }: SkillManagerProp
                     {/* Agent chips */}
                     <div className="mt-2 flex flex-wrap gap-1">
                       {ALL_ROLES.map((role) => {
-                        const meta = AGENT_COLOR_MAP[role];
+                        const vis = getAgentVisual(role);
                         const assigned = skill.assignedAgents.includes(role);
                         return (
                           <motion.button
@@ -221,13 +213,13 @@ export function SkillManager({ skills, onChange, projectPath }: SkillManagerProp
                             onClick={() => toggleAgent(skill.id, role)}
                             className={`rounded-full px-2 py-0.5 text-[9px] font-medium transition-colors ${
                               assigned
-                                ? `${meta.bg} ${meta.text} border border-current/20`
+                                ? `${vis.bgBadge} ${vis.text} border border-current/20`
                                 : "border border-white/[0.06] bg-white/[0.02] text-text-muted hover:text-text-secondary"
                             }`}
                             whileTap={{ scale: 0.92 }}
                             transition={SPRING}
                           >
-                            {meta.label}
+                            {vis.tag}
                           </motion.button>
                         );
                       })}

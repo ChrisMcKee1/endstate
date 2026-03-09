@@ -114,6 +114,15 @@
   --color-agent-fixer: #00FFA3;
   --color-agent-ux: #FFB800;
   --color-agent-simplifier: #FF69B4;
+  --color-agent-analyst-ui: #00E5FF;
+  --color-agent-analyst-backend: #B026FF;
+  --color-agent-analyst-database: #FFD700;
+  --color-agent-analyst-docs: #FF69B4;
+  --color-agent-fixer-ui: #00FFA3;
+  --color-agent-fixer-backend: #00FFA3;
+  --color-agent-fixer-database: #00FFA3;
+  --color-agent-fixer-docs: #00FFA3;
+  --color-agent-consolidator: #FFD700;
 
   /* Severity */
   --color-severity-critical: #EF4444;

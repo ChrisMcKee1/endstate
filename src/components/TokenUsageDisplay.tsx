@@ -10,56 +10,34 @@ import {
 } from "framer-motion";
 import type { AgentRole } from "@/lib/types";
 import { AGENT_ROLES } from "@/lib/types";
+import { getAgentVisual, hexToRgb } from "@/lib/agent-visuals";
 
-// ─── Agent Palette ───────────────────────────────────────────────────────────
+// ─── Agent display helpers ───────────────────────────────────────────────────
 
-const AGENT_META: Record<
-  string,
-  { label: string; color: string; glow: string; gradient: string }
-> = {
-  [AGENT_ROLES.RESEARCHER]: {
-    label: "Research",
-    color: "#FF6B6B",
-    glow: "rgba(255, 107, 107, 0.45)",
-    gradient: "linear-gradient(90deg, #FF6B6B 0%, #EE5A5A 100%)",
-  },
-  [AGENT_ROLES.EXPLORER]: {
-    label: "Explorer",
-    color: "#00E5FF",
-    glow: "rgba(0, 229, 255, 0.45)",
-    gradient: "linear-gradient(90deg, #00E5FF 0%, #00B8D4 100%)",
-  },
-  [AGENT_ROLES.ANALYST]: {
-    label: "Analyst",
-    color: "#B026FF",
-    glow: "rgba(176, 38, 255, 0.45)",
-    gradient: "linear-gradient(90deg, #B026FF 0%, #9C27B0 100%)",
-  },
-  [AGENT_ROLES.FIXER]: {
-    label: "Fixer",
-    color: "#00FFA3",
-    glow: "rgba(0, 255, 163, 0.45)",
-    gradient: "linear-gradient(90deg, #00FFA3 0%, #00C853 100%)",
-  },
-  [AGENT_ROLES.UX_REVIEWER]: {
-    label: "UX",
-    color: "#FFB800",
-    glow: "rgba(255, 184, 0, 0.45)",
-    gradient: "linear-gradient(90deg, #FFB800 0%, #FF9100 100%)",
-  },
-  [AGENT_ROLES.CODE_SIMPLIFIER]: {
-    label: "Simplify",
-    color: "#FF69B4",
-    glow: "rgba(255, 105, 180, 0.45)",
-    gradient: "linear-gradient(90deg, #FF69B4 0%, #FF1493 100%)",
-  },
-};
+function getTokenMeta(role: string) {
+  const v = getAgentVisual(role);
+  return {
+    label: v.tag,
+    color: v.hex,
+    glow: `rgba(${hexToRgb(v.hex)}, 0.45)`,
+    gradient: `linear-gradient(90deg, ${v.hex} 0%, ${v.gradientEnd} 100%)`,
+  };
+}
 
 const AGENT_ORDER: string[] = [
   AGENT_ROLES.RESEARCHER,
   AGENT_ROLES.EXPLORER,
   AGENT_ROLES.ANALYST,
+  AGENT_ROLES.ANALYST_UI,
+  AGENT_ROLES.ANALYST_BACKEND,
+  AGENT_ROLES.ANALYST_DATABASE,
+  AGENT_ROLES.ANALYST_DOCS,
   AGENT_ROLES.FIXER,
+  AGENT_ROLES.FIXER_UI,
+  AGENT_ROLES.FIXER_BACKEND,
+  AGENT_ROLES.FIXER_DATABASE,
+  AGENT_ROLES.FIXER_DOCS,
+  AGENT_ROLES.CONSOLIDATOR,
   AGENT_ROLES.UX_REVIEWER,
   AGENT_ROLES.CODE_SIMPLIFIER,
 ];
@@ -79,6 +57,7 @@ interface FullMetrics {
   tasksCreated?: number;
   tasksResolved?: number;
   uxScores?: Record<string, number>;
+  modelMaxContextTokens?: number;
 }
 
 // ─── Format helpers ──────────────────────────────────────────────────────────
@@ -169,8 +148,7 @@ function AgentBar({
   prevTotal,
   isCompacting,
 }: AgentBarProps) {
-  const meta = AGENT_META[role];
-  if (!meta) return null;
+  const meta = getTokenMeta(role);
 
   const total = inputTokens + outputTokens;
   const inputPct = maxTokens > 0 ? (inputTokens / maxTokens) * 100 : 0;
@@ -602,12 +580,13 @@ function AgentLeaderboard({ turns }: { turns: Record<string, number> }) {
   const sorted = useMemo(() => {
     return AGENT_ORDER
       .map((role) => ({ role, turns: turns[role] ?? 0 }))
+      .filter((s) => s.turns > 0)
       .sort((a, b) => b.turns - a.turns);
   }, [turns]);
 
   const maxTurns = Math.max(...sorted.map((s) => s.turns), 1);
 
-  if (sorted.every((s) => s.turns === 0)) return null;
+  if (sorted.length === 0) return null;
 
   return (
     <div className="flex flex-col gap-1 min-w-[80px]">
@@ -615,8 +594,7 @@ function AgentLeaderboard({ turns }: { turns: Record<string, number> }) {
         Agent Turns
       </span>
       {sorted.map(({ role, turns: t }, i) => {
-        const meta = AGENT_META[role];
-        if (!meta) return null;
+        const meta = getTokenMeta(role);
         const pct = maxTurns > 0 ? (t / maxTurns) * 100 : 0;
 
         return (
@@ -738,7 +716,12 @@ export function TokenUsageDisplay({
     return sum;
   }, [metrics.agentInputTokens, metrics.agentOutputTokens]);
 
+  // Scale bars against the model's actual context window from SDK metadata.
+  // Falls back to 200K if the model lookup hasn't resolved yet.
+  const modelMax = metrics.modelMaxContextTokens ?? 0;
   const agentMax = useMemo(() => {
+    if (modelMax > 0) return modelMax;
+    // Fallback: use relative scale with a reasonable floor
     const inp = metrics.agentInputTokens ?? {};
     const out = metrics.agentOutputTokens ?? {};
     let maxSingle = 0;
@@ -746,8 +729,8 @@ export function TokenUsageDisplay({
       const t = (inp[role] ?? 0) + (out[role] ?? 0);
       if (t > maxSingle) maxSingle = t;
     }
-    return Math.max(maxSingle * 1.5, 10_000);
-  }, [metrics.agentInputTokens, metrics.agentOutputTokens]);
+    return Math.max(maxSingle * 1.5, 200_000);
+  }, [metrics.agentInputTokens, metrics.agentOutputTokens, modelMax]);
 
   const totalToolCalls = useMemo(() => {
     if (!metrics.toolInvocations) return 0;
@@ -802,10 +785,14 @@ export function TokenUsageDisplay({
 
       <div className="relative flex items-center gap-4 px-4 py-2.5">
         {/* ── Token Section ── */}
-        <div className="flex items-center gap-4 flex-1 min-w-0">
-          {/* Agent bars */}
-          <div className="flex flex-1 items-stretch gap-4 min-w-0">
-            {AGENT_ORDER.map((role) => (
+        <div className="flex items-center gap-4 flex-1 min-w-0 overflow-hidden">
+          {/* Agent bars — only show agents with activity */}
+          <div className="flex flex-1 items-stretch gap-3 min-w-0 overflow-x-auto">
+            {AGENT_ORDER.filter((role) => {
+              const inp = metrics.agentInputTokens?.[role] ?? 0;
+              const out = metrics.agentOutputTokens?.[role] ?? 0;
+              return inp + out > 0 || activeAgent === role;
+            }).map((role) => (
               <AgentBar
                 key={role}
                 role={role}
@@ -817,6 +804,12 @@ export function TokenUsageDisplay({
                 isCompacting={isCompacting}
               />
             ))}
+            {/* Empty state when no agents have activity */}
+            {!hasAnyActivity && (
+              <div className="flex items-center gap-2 py-1 text-text-muted/50">
+                <span className="text-[10px] uppercase tracking-widest">No agent activity yet</span>
+              </div>
+            )}
           </div>
 
           {/* Total tokens badge */}

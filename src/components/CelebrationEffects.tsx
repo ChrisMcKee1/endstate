@@ -279,15 +279,21 @@ export function CelebrationEffects({ tasks, events }: CelebrationEffectsProps) {
     prevEventsLen.current = events.length;
 
     for (const evt of newEvents) {
-      // Pipeline converged
+      // Pipeline converged — only celebrate if we ran at least one full cycle
       if (
-        evt.type === SESSION_EVENT_TYPES.PIPELINE_STATE_CHANGE &&
-        (evt.data.state as PipelineState | undefined)?.status ===
-          PIPELINE_STATUSES.STOPPED
+        evt.type === SESSION_EVENT_TYPES.PIPELINE_STATE_CHANGE
       ) {
-        if (awardAchievement(ACHIEVEMENTS.CONVERGED.id)) {
-          fireworks(4000);
-          showBanner("Pipeline converged — mission complete!");
+        const evtState = evt.data.state as PipelineState | undefined;
+        if (
+          evtState?.status === PIPELINE_STATUSES.STOPPED &&
+          evtState.currentCycle > 0 &&
+          evtState.tasksSummary.total > 0 &&
+          evtState.tasksSummary.open === 0
+        ) {
+          if (awardAchievement(ACHIEVEMENTS.CONVERGED.id)) {
+            fireworks(4000);
+            showBanner("Pipeline converged — mission complete!");
+          }
         }
       }
 

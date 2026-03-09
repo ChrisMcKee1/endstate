@@ -70,26 +70,9 @@ export function ModelSelector({ value, onChange }: ModelSelectorProps) {
   const dropdownRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
-  const fetchModels = () => {
+  const fetchModels = (autoSelect = false) => {
     setLoading(true);
     setFetchError(null);
-    fetch("/api/models")
-      .then((r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return r.json();
-      })
-      .then((data: { models?: ModelInfo[] }) => {
-        if (data.models) setModels(data.models);
-      })
-      .catch((err: unknown) => {
-        const msg = err instanceof Error ? err.message : "Failed to load models";
-        setFetchError(msg);
-      })
-      .finally(() => setLoading(false));
-  };
-
-  // Initial load
-  useEffect(() => {
     fetch("/api/models")
       .then((r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
@@ -99,20 +82,21 @@ export function ModelSelector({ value, onChange }: ModelSelectorProps) {
         if (data.models) {
           setModels(data.models);
 
-          // Auto-select best model if current value isn't in the list
-          const currentMatch = data.models.find((m) => m.id === value);
-          if (!currentMatch && data.models.length > 0) {
-            for (const pattern of PREFERRED_MODEL_PATTERNS) {
-              const match = data.models.find((m) =>
-                m.id.toLowerCase().includes(pattern)
-              );
-              if (match) {
-                onChange(match.id);
-                return;
+          if (autoSelect) {
+            // Auto-select best model if current value isn't in the list
+            const currentMatch = data.models.find((m) => m.id === value);
+            if (!currentMatch && data.models.length > 0) {
+              for (const pattern of PREFERRED_MODEL_PATTERNS) {
+                const match = data.models.find((m) =>
+                  m.id.toLowerCase().includes(pattern)
+                );
+                if (match) {
+                  onChange(match.id);
+                  return;
+                }
               }
+              onChange(data.models[0].id);
             }
-            // No preferred match — pick first available
-            onChange(data.models[0].id);
           }
         }
       })
@@ -121,6 +105,11 @@ export function ModelSelector({ value, onChange }: ModelSelectorProps) {
         setFetchError(msg);
       })
       .finally(() => setLoading(false));
+  };
+
+  // Initial load with auto-select
+  useEffect(() => {
+    fetchModels(true); // eslint-disable-line react-hooks/set-state-in-effect -- onChange runs asynchronously in fetch .then()
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -171,7 +160,7 @@ export function ModelSelector({ value, onChange }: ModelSelectorProps) {
             <motion.button
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
-              onClick={fetchModels}
+              onClick={() => fetchModels()}
               className="shrink-0 rounded-lg bg-status-live/10 px-2.5 py-1 text-[11px] font-medium text-status-live transition-colors hover:bg-status-live/20 hover:shadow-[0_0_12px_rgba(0,255,163,0.15)]"
             >
               Retry

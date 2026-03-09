@@ -15,7 +15,7 @@ An autonomous development tool that uses the **GitHub Copilot SDK (TypeScript)**
 | Real-time | Server-Sent Events (SSE) |
 | Backend | Next.js API Routes (co-located) |
 | Observability | OpenTelemetry (traces + metrics) |
-| State | In-memory + JSON file persistence (`data/tasks/`) |
+| State | In-memory + JSON file persistence (`.projects/<slug>/tasks/`) |
 | Browser automation | Playwright MCP Server |
 | Code access | Filesystem MCP Server |
 | Git integration | GitHub MCP Server |
@@ -63,7 +63,7 @@ src/
 │   ├── otel/                          # OTel setup, spans, metrics
 │   └── types.ts                       # Task, TaskEvent, PipelineConfig interfaces
 ├── components/                        # Dashboard, WorkflowGraph, AgentStream, etc.
-data/tasks/                            # Persisted task JSON files
+.projects/                             # Per-project data (tasks, config) — gitignored
 ```
 
 ## Coding Conventions
@@ -96,8 +96,9 @@ data/tasks/                            # Persisted task JSON files
 - Prefer bold, intentional design over generic AI aesthetics (see `frontend-design` skill).
 
 ### State & Persistence
-- Task store is in-memory with JSON file persistence to `data/tasks/{task-id}.json`.
-- Pipeline config persists to `.agentic-dev.json` in the target project root.
+- Task store is in-memory with JSON file persistence to `.projects/<slug>/tasks/{task-id}.json`.
+- Pipeline config persists to `.projects/<slug>/config.json` (and mirrored to `.agentic-dev.json` in the target project root).
+- Project resolution via `src/lib/pipeline/project-resolver.ts` — handles slugging, active project tracking, and legacy migration.
 - No database. No ORM.
 
 ### OpenTelemetry

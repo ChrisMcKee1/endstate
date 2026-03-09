@@ -5,10 +5,11 @@ import { agentTools } from "@/lib/copilot/tools";
 import { dequeue, isEmpty } from "@/lib/pipeline/steering";
 import { getSkillDirectoriesForAgent } from "@/lib/pipeline/skill-manager";
 import { getMcpServersForAgent } from "@/lib/pipeline/mcp-manager";
+import { getCheatSheet } from "@/lib/pipeline/cheat-sheet-store";
 import { startToolSpan, endSpanOk } from "@/lib/otel/spans";
 import { recordToolInvocation } from "@/lib/otel/metrics";
 import type { AgentRole, PipelineConfig } from "@/lib/types";
-import { AGENT_ROLES } from "@/lib/types";
+import { AGENT_ROLES, isAnalystRole, isFixerRole } from "@/lib/types";
 import { approveAll } from "@github/copilot-sdk";
 import type { SessionConfig } from "@github/copilot-sdk";
 
@@ -63,7 +64,23 @@ function loadSystemPrompt(role: AgentRole, config: PipelineConfig): string {
     "If the target app URL is not responding, create a CRITICAL task and stop. Do NOT fall back to browsing other URLs.",
   ].join("\n");
 
-  return [basePrompt, agentPrompt, context].filter(Boolean).join("\n\n---\n\n");
+  // Inject cheat sheet for all agents except the Researcher (who produces it)
+  let cheatSheetSection = "";
+  if (role !== AGENT_ROLES.RESEARCHER) {
+    const cheatSheet = getCheatSheet(config.projectPath);
+    if (cheatSheet) {
+      cheatSheetSection = [
+        "",
+        "## RESEARCHER CHEAT SHEET",
+        "",
+        "The following project overview was produced by the Researcher agent. Use this as your primary reference instead of re-exploring the project from scratch.",
+        "",
+        cheatSheet,
+      ].join("\n");
+    }
+  }
+
+  return [basePrompt, agentPrompt, context, cheatSheetSection].filter(Boolean).join("\n\n---\n\n");
 }
 
 // ─── MCP server configs per role ──────────────────────────────────────────────
@@ -95,31 +112,31 @@ function mcpServersForRole(
   role: AgentRole,
   projectPath: string
 ): Record<string, { type: "local"; command: string; args: string[]; tools: string[] }> {
+  // Domain-scoped roles: analyst-* gets filesystem, fixer-* gets filesystem + github
+  if (isAnalystRole(role)) {
+    return { fs: mcpFilesystem(projectPath) };
+  }
+  if (isFixerRole(role)) {
+    return { fs: mcpFilesystem(projectPath), github: MCP_GITHUB };
+  }
+
+  // Base roles and special roles
   switch (role) {
     case AGENT_ROLES.RESEARCHER:
-      return { fs: mcpFilesystem(projectPath) };
-    case AGENT_ROLES.EXPLORER:
-      return {
-        fs: mcpFilesystem(projectPath),
-        playwright: MCP_PLAYWRIGHT,
-      };
     case AGENT_ROLES.ANALYST:
       return { fs: mcpFilesystem(projectPath) };
-    case AGENT_ROLES.FIXER:
-      return {
-        fs: mcpFilesystem(projectPath),
-        github: MCP_GITHUB,
-      };
+
+    case AGENT_ROLES.EXPLORER:
     case AGENT_ROLES.UX_REVIEWER:
-      return {
-        fs: mcpFilesystem(projectPath),
-        playwright: MCP_PLAYWRIGHT,
-      };
+      return { fs: mcpFilesystem(projectPath), playwright: MCP_PLAYWRIGHT };
+
+    case AGENT_ROLES.FIXER:
+    case AGENT_ROLES.CONSOLIDATOR:
     case AGENT_ROLES.CODE_SIMPLIFIER:
-      return {
-        fs: mcpFilesystem(projectPath),
-        github: MCP_GITHUB,
-      };
+      return { fs: mcpFilesystem(projectPath), github: MCP_GITHUB };
+
+    default:
+      return { fs: mcpFilesystem(projectPath) };
   }
 }
 
@@ -172,13 +189,17 @@ function buildHooks(): NonNullable<SessionConfig["hooks"]> {
 
 export async function createAgentSession(
   role: AgentRole,
-  config: PipelineConfig
+  config: PipelineConfig,
+  overrides?: { workingDirectory?: string; configDir?: string },
 ) {
   const client = await getClient();
   const systemPrompt = loadSystemPrompt(role, config);
 
+  // Use worktree path if provided, otherwise use the main project path
+  const effectivePath = overrides?.workingDirectory ?? config.projectPath;
+
   // Resolve MCP servers: default per role, merged with user overrides
-  const defaultMcps = mcpServersForRole(role, config.projectPath);
+  const defaultMcps = mcpServersForRole(role, effectivePath);
   const mcpServers = getMcpServersForAgent(
     role,
     defaultMcps,
@@ -204,8 +225,8 @@ export async function createAgentSession(
   // Resolve tool overrides
   const toolLists = buildToolLists(config);
 
-  // Ensure .agentic output directory exists inside the target project
-  const agenticDir = path.join(config.projectPath, ".agentic");
+  // Ensure .agentic output directory exists inside the effective project path
+  const agenticDir = overrides?.configDir ?? path.join(effectivePath, ".agentic");
   if (!fs.existsSync(agenticDir)) {
     fs.mkdirSync(agenticDir, { recursive: true });
   }
@@ -216,7 +237,7 @@ export async function createAgentSession(
     systemMessage: { mode: "replace", content: systemPrompt },
     tools: agentTools,
     mcpServers,
-    workingDirectory: config.projectPath,
+    workingDirectory: effectivePath,
     configDir: agenticDir,
     infiniteSessions: {
       enabled: config.infiniteSessions,
