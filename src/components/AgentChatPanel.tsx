@@ -54,16 +54,20 @@ export function AgentChatPanel({
   // Auto-scroll to bottom
   useEffect(() => {
     if (!autoScroll || !scrollRef.current) return;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
     const frame = requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         if (scrollRef.current) {
           isScrollingProgrammatically.current = true;
           scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-          setTimeout(() => { isScrollingProgrammatically.current = false; }, 50);
+          timeoutId = setTimeout(() => { isScrollingProgrammatically.current = false; }, 50);
         }
       });
     });
-    return () => cancelAnimationFrame(frame);
+    return () => {
+      cancelAnimationFrame(frame);
+      if (timeoutId) clearTimeout(timeoutId);
+    };
   }, [entries, autoScroll]);
 
   const handleScroll = useCallback(() => {

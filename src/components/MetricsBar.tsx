@@ -26,11 +26,11 @@ function useAnimatedValue(target: number) {
 
   useEffect(() => {
     motionVal.set(target);
-  }, [target, motionVal]);
+  }, [target]); // eslint-disable-line react-hooks/exhaustive-deps -- motionVal is a stable MotionValue ref
 
   useEffect(() => {
     return spring.on("change", (v: number) => setDisplay(Math.round(v)));
-  }, [spring]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps -- spring is a stable MotionValue ref
 
   return display;
 }

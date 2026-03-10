@@ -86,11 +86,11 @@ function SpringNumber({
 
   useEffect(() => {
     motionVal.set(value);
-  }, [value, motionVal]);
+  }, [value]); // eslint-disable-line react-hooks/exhaustive-deps -- motionVal is a stable MotionValue ref
 
   useEffect(() => {
     return display.on("change", (v) => setText(v));
-  }, [display]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps -- display is a stable MotionValue ref
 
   return (
     <span className={className} style={{ color }}>
@@ -114,11 +114,11 @@ function SpringInt({
 
   useEffect(() => {
     motionVal.set(value);
-  }, [value, motionVal]);
+  }, [value]); // eslint-disable-line react-hooks/exhaustive-deps -- motionVal is a stable MotionValue ref
 
   useEffect(() => {
     return spring.on("change", (v: number) => setDisplay(Math.round(v)));
-  }, [spring]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps -- spring is a stable MotionValue ref
 
   return (
     <span className={className} style={{ color }}>
@@ -666,45 +666,49 @@ export function TokenUsageDisplay({
     };
   }, [isCompacting]);
 
+  // Use a ref to track previous metrics for snapshot diffs
+  const metricsRef = useRef<FullMetrics>({});
+
   // Poll metrics — 3s for responsive updates
   useEffect(() => {
+    let cancelled = false;
     const fetchMetrics = () => {
       fetch("/api/metrics")
         .then((r) => r.json())
         .then((data: { metrics?: FullMetrics }) => {
-          if (data.metrics) {
-            setMetrics((prev) => {
-              // Snapshot previous token totals for growth detection
-              const inp = prev.agentInputTokens ?? {};
-              const out = prev.agentOutputTokens ?? {};
-              const totals: Record<string, number> = {};
-              for (const role of AGENT_ORDER) {
-                totals[role] = (inp[role] ?? 0) + (out[role] ?? 0);
-              }
-              setPrevTotals(totals);
+          if (cancelled || !data.metrics) return;
 
-              // Snapshot previous stat values for growth flash
-              const prevToolCalls = prev.toolInvocations
-                ? Object.values(prev.toolInvocations).reduce((s, v) => s + v, 0)
-                : 0;
-              setPrevMetrics({
-                buildsPass: prev.buildsPass ?? 0,
-                buildsFail: prev.buildsFail ?? 0,
-                toolCalls: prevToolCalls,
-                tasksResolved: prev.tasksResolved ?? 0,
-                compactions: prev.compactions ?? 0,
-              });
-
-              return data.metrics!;
-            });
+          // Snapshot previous values from ref (not inside setState)
+          const prev = metricsRef.current;
+          const inp = prev.agentInputTokens ?? {};
+          const out = prev.agentOutputTokens ?? {};
+          const totals: Record<string, number> = {};
+          for (const role of AGENT_ORDER) {
+            totals[role] = (inp[role] ?? 0) + (out[role] ?? 0);
           }
+          setPrevTotals(totals);
+
+          const prevToolCalls = prev.toolInvocations
+            ? Object.values(prev.toolInvocations).reduce((s, v) => s + v, 0)
+            : 0;
+          setPrevMetrics({
+            buildsPass: prev.buildsPass ?? 0,
+            buildsFail: prev.buildsFail ?? 0,
+            toolCalls: prevToolCalls,
+            tasksResolved: prev.tasksResolved ?? 0,
+            compactions: prev.compactions ?? 0,
+          });
+
+          // Now update the metrics state and ref
+          metricsRef.current = data.metrics;
+          setMetrics(data.metrics);
         })
         .catch(() => {});
     };
 
     fetchMetrics();
     const interval = setInterval(fetchMetrics, 3_000);
-    return () => clearInterval(interval);
+    return () => { cancelled = true; clearInterval(interval); };
   }, []);
 
   const totalTokens = useMemo(() => {

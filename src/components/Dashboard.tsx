@@ -108,17 +108,32 @@ export function Dashboard({ config }: DashboardProps) {
   const activeMessageId = useRef<string | null>(null);
   const activeReasoningId = useRef<string | null>(null);
 
-  const { events, connectionStatus, acknowledge } = useSSE("/api/pipeline/stream");
+  const { events, connectionStatus, acknowledge, generation, reconnect } = useSSE("/api/pipeline/stream");
 
   // ── Process SSE events ──────────────────────────────────────────────────────
   // Track how many events we've already processed to avoid re-processing
   // the same events across React re-renders while acknowledge is pending.
   const processedCount = useRef(0);
+  // Track the SSE generation so we reset processedCount when the events array
+  // is replaced after an acknowledge+flush cycle (which shifts the array).
+  const lastGeneration = useRef(0);
 
   useEffect(() => {
     if (events.length === 0) {
       processedCount.current = 0;
       return;
+    }
+
+    // When generation changes, the events array was rebuilt (acknowledged events
+    // were removed). Reset our cursor so we process from the start of the new array.
+    if (generation !== lastGeneration.current) {
+      processedCount.current = 0;
+      lastGeneration.current = generation;
+    }
+
+    // Safety: if processedCount somehow exceeds the array length, clamp it
+    if (processedCount.current > events.length) {
+      processedCount.current = 0;
     }
 
     // Only process events we haven't seen yet
@@ -328,7 +343,7 @@ export function Dashboard({ config }: DashboardProps) {
         // from a previous render cycle), merge their content
         let merged = prev;
         let batchStart = 0;
-        if (batch.length > 0 && prev.length > 0 && activeMessageId.current) {
+        if (prev.length > 0 && activeMessageId.current) {
           const lastPrev = prev[prev.length - 1];
           if (lastPrev.id === activeMessageId.current && batch[0].id === activeMessageId.current) {
             // Merge first batch item into last prev item
@@ -340,7 +355,7 @@ export function Dashboard({ config }: DashboardProps) {
         return combined.length > 1000 ? combined.slice(-800) : combined;
       });
     }
-  }, [events, acknowledge]);
+  }, [events, acknowledge, generation]);
 
   // ── Poll tasks ──────────────────────────────────────────────────────────────
 
@@ -535,9 +550,21 @@ export function Dashboard({ config }: DashboardProps) {
           </div>
 
           {connectionStatus !== "connected" && (
-            <span className="rounded-full bg-severity-critical/10 px-2 py-0.5 text-[10px] font-medium text-severity-critical">
-              {connectionStatus === "error" ? "DISCONNECTED" : "RECONNECTING"}
-            </span>
+            <button
+              onClick={reconnect}
+              className="flex items-center gap-1.5 rounded-full bg-severity-critical/10 px-2.5 py-0.5 text-[10px] font-medium text-severity-critical transition-colors hover:bg-severity-critical/20"
+              title="Click to reconnect"
+            >
+              <motion.span
+                animate={connectionStatus === "disconnected" ? { opacity: [0.5, 1, 0.5] } : {}}
+                transition={{ repeat: Infinity, duration: 1.5 }}
+              >
+                {connectionStatus === "error" || connectionStatus === "disconnected" ? "RECONNECTING" : "CONNECTING"}
+              </motion.span>
+              <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182" />
+              </svg>
+            </button>
           )}
 
           {/* Pipeline Start / Stop / Resume / New (2026 §4 — spring physics, glow hover) */}

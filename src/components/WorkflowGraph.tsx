@@ -181,11 +181,17 @@ export function WorkflowGraph({
   selectedAgent,
 }: WorkflowGraphProps) {
   const isRunning = status === PIPELINE_STATUSES.RUNNING;
-  const completedSet = new Set(completedAgents);
-  const activeSet = new Set(activeAgents.length > 0 ? activeAgents : activeAgent ? [activeAgent] : []);
-  const activeDomainSet = new Set(activeDomains);
+  const completedSet = useMemo(() => new Set(completedAgents), [completedAgents]);
+  const activeSet = useMemo(
+    () => new Set(activeAgents.length > 0 ? activeAgents : activeAgent ? [activeAgent] : []),
+    [activeAgents, activeAgent],
+  );
+  const activeDomainSet = useMemo(() => new Set(activeDomains), [activeDomains]);
 
-  const graph = agentGraph?.length ? agentGraph.filter((n) => n.enabled) : DEFAULT_AGENT_GRAPH;
+  const graph = useMemo(
+    () => agentGraph?.length ? agentGraph.filter((n) => n.enabled) : DEFAULT_AGENT_GRAPH,
+    [agentGraph],
+  );
   const { nodes, edges, width, height } = useMemo(() => computeLayout(graph), [graph]);
 
   const handleNodeClick = useCallback(

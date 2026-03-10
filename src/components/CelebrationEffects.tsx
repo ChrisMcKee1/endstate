@@ -274,6 +274,10 @@ export function CelebrationEffects({ tasks, events }: CelebrationEffectsProps) {
   // ── Event-based celebrations ────────────────────────────────────────────
 
   useEffect(() => {
+    // When events array shrinks (e.g. after SSE acknowledge/flush), reset cursor
+    if (events.length < prevEventsLen.current) {
+      prevEventsLen.current = 0;
+    }
     if (events.length <= prevEventsLen.current) return;
     const newEvents = events.slice(prevEventsLen.current);
     prevEventsLen.current = events.length;

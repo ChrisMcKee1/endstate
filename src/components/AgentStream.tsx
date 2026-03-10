@@ -58,6 +58,7 @@ export function AgentStream({ entries, activeAgent }: AgentStreamProps) {
   // Auto-scroll to bottom whenever entries change
   useEffect(() => {
     if (!autoScroll || !scrollRef.current) return;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
     // Double-rAF ensures DOM has painted with new content heights
     const frame = requestAnimationFrame(() => {
       requestAnimationFrame(() => {
@@ -65,11 +66,14 @@ export function AgentStream({ entries, activeAgent }: AgentStreamProps) {
           isScrollingProgrammatically.current = true;
           scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
           // Reset flag after scroll event fires
-          setTimeout(() => { isScrollingProgrammatically.current = false; }, 50);
+          timeoutId = setTimeout(() => { isScrollingProgrammatically.current = false; }, 50);
         }
       });
     });
-    return () => cancelAnimationFrame(frame);
+    return () => {
+      cancelAnimationFrame(frame);
+      if (timeoutId) clearTimeout(timeoutId);
+    };
   }, [entries, autoScroll]);
 
   // Detect ONLY user-initiated scrolls
