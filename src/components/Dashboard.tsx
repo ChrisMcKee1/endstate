@@ -91,7 +91,13 @@ export function Dashboard({ config }: DashboardProps) {
     useState<PipelineState>(INITIAL_STATE);
   const [streamEntries, setStreamEntries] = useState<StreamEntry[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [activeTab, setActiveTab] = useState<SidebarTab>("tasks");
+  const [activeTab, setActiveTab] = useState<SidebarTab>(() => {
+    try {
+      const saved = localStorage.getItem("endstate-sidebar-tab");
+      if (saved && SIDEBAR_TABS.includes(saved as SidebarTab)) return saved as SidebarTab;
+    } catch { /* SSR */ }
+    return "tasks";
+  });
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [contextUsage, setContextUsage] = useState(0);
@@ -357,6 +363,12 @@ export function Dashboard({ config }: DashboardProps) {
     }
   }, [events, acknowledge, generation]);
 
+  // ── Persist sidebar tab ─────────────────────────────────────────────────────
+
+  useEffect(() => {
+    try { localStorage.setItem("endstate-sidebar-tab", activeTab); } catch { /* SSR */ }
+  }, [activeTab]);
+
   // ── Poll tasks ──────────────────────────────────────────────────────────────
 
   const fetchTasks = useCallback(() => {
@@ -549,23 +561,25 @@ export function Dashboard({ config }: DashboardProps) {
             </span>
           </div>
 
-          {connectionStatus !== "connected" && (
-            <button
-              onClick={reconnect}
-              className="flex items-center gap-1.5 rounded-full bg-severity-critical/10 px-2.5 py-0.5 text-[10px] font-medium text-severity-critical transition-colors hover:bg-severity-critical/20"
-              title="Click to reconnect"
-            >
-              <motion.span
-                animate={connectionStatus === "disconnected" ? { opacity: [0.5, 1, 0.5] } : {}}
-                transition={{ repeat: Infinity, duration: 1.5 }}
+          <span aria-live="polite" aria-atomic="true">
+            {connectionStatus !== "connected" && (
+              <button
+                onClick={reconnect}
+                className="flex items-center gap-1.5 rounded-full bg-severity-critical/10 px-2.5 py-0.5 text-[10px] font-medium text-severity-critical transition-colors hover:bg-severity-critical/20"
+                title="Click to reconnect"
               >
-                {connectionStatus === "error" || connectionStatus === "disconnected" ? "RECONNECTING" : "CONNECTING"}
-              </motion.span>
-              <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182" />
-              </svg>
-            </button>
-          )}
+                <motion.span
+                  animate={connectionStatus === "disconnected" ? { opacity: [0.5, 1, 0.5] } : {}}
+                  transition={{ repeat: Infinity, duration: 1.5 }}
+                >
+                  {connectionStatus === "error" || connectionStatus === "disconnected" ? "RECONNECTING" : "CONNECTING"}
+                </motion.span>
+                <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182" />
+                </svg>
+              </button>
+            )}
+          </span>
 
           {/* Pipeline Start / Stop / Resume / New (2026 §4 — spring physics, glow hover) */}
           {isRunning ? (
@@ -718,8 +732,10 @@ export function Dashboard({ config }: DashboardProps) {
             {SIDEBAR_TABS.map((tab) => (
               <button
                 key={tab}
+                id={`sidebar-tab-${tab}`}
                 role="tab"
                 aria-selected={activeTab === tab}
+                aria-controls="sidebar-tabpanel"
                 onClick={() => setActiveTab(tab)}
                 className={`flex-1 py-2.5 text-center text-[10px] uppercase tracking-widest transition-colors ${
                   activeTab === tab
@@ -738,7 +754,7 @@ export function Dashboard({ config }: DashboardProps) {
           </div>
 
           {/* Tab content */}
-          <div className="flex-1 overflow-hidden" role="tabpanel">
+          <div className="flex-1 overflow-hidden" role="tabpanel" id="sidebar-tabpanel" aria-labelledby={`sidebar-tab-${activeTab}`}>
             <ErrorBoundary fallbackTitle="Sidebar Error">
               {activeTab === "tasks" && (
                 <TaskList
@@ -834,6 +850,8 @@ export function Dashboard({ config }: DashboardProps) {
               exit={{ opacity: 0, scale: 0.92, y: 10 }}
               transition={{ type: "spring", stiffness: 400, damping: 28 }}
               className="glass-panel w-full max-w-sm rounded-2xl p-6"
+              role="dialog"
+              aria-modal="true"
             >
               <h3 className="text-sm font-bold uppercase tracking-wider text-text-primary">
                 New Project?

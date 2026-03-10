@@ -116,6 +116,8 @@ export function AgentChatPanel({
         exit={{ x: "100%" }}
         transition={{ type: "spring", stiffness: 350, damping: 30 }}
         className="glass-panel flex h-full w-[480px] flex-col rounded-l-2xl border-r-0 shadow-elevation-3"
+        role="dialog"
+        aria-modal="true"
       >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-border-subtle px-5 py-3.5">

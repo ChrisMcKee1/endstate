@@ -124,6 +124,8 @@ export function SettingsPanel({ config, onClose, onSave }: SettingsPanelProps) {
           exit={{ x: "100%" }}
           transition={{ type: "spring", stiffness: 350, damping: 30 }}
           className="glass-panel flex h-full w-[400px] max-w-full flex-col rounded-l-2xl border-l border-border-subtle"
+          role="dialog"
+          aria-modal="true"
         >
           {/* Header */}
           <div className="flex items-center justify-between border-b border-border-subtle px-4 py-3">

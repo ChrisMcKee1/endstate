@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
-import { getMetricsSnapshot } from "@/lib/otel/metrics";
+import { getMetricsSnapshot, withApiTiming } from "@/lib/otel/metrics";
 
 export async function GET() {
-  const snapshot = getMetricsSnapshot();
-  return NextResponse.json({ metrics: snapshot }, { status: 200 });
+  return withApiTiming("metrics.get", async () => {
+    const snapshot = getMetricsSnapshot();
+    return NextResponse.json({ metrics: snapshot }, { status: 200 });
+  });
 }

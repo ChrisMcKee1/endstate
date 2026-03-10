@@ -111,6 +111,8 @@ export function TaskDetail({ task, onClose }: TaskDetailProps) {
           exit={{ opacity: 0, scale: 0.9 }}
           transition={{ type: "spring", stiffness: 350, damping: 28 }}
           className="glass-panel relative mx-4 flex max-h-[85vh] w-full max-w-2xl flex-col rounded-2xl"
+          role="dialog"
+          aria-modal="true"
         >
           {/* Close button */}
           <motion.button

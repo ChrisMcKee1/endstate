@@ -134,6 +134,7 @@ export function SteeringBar({ status, onSteered, onNewVision }: SteeringBarProps
                 ? "Steer the pipeline — e.g. 'Focus on accessibility'"
                 : "Describe your next vision — e.g. 'Add dark mode support and fix all contrast issues'"
             }
+            aria-label={isRunning ? "Pipeline steering message" : "New vision description"}
             disabled={sending}
             className="w-full rounded-full border border-border-active bg-void/60 px-5 py-3 font-mono text-sm text-text-primary placeholder:text-text-muted/40 transition-shadow focus:border-accent/40 focus:shadow-[inset_0_0_20px_rgba(0,229,255,0.06),0_0_16px_rgba(0,229,255,0.08)] focus:outline-none disabled:opacity-30"
             onKeyDown={(e) => {

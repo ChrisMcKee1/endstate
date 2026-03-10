@@ -1,6 +1,7 @@
 import { onSSE, getPipelineState } from "@/lib/pipeline/orchestrator";
 import type { SSEEvent } from "@/lib/types";
 import { SESSION_EVENT_TYPES } from "@/lib/types";
+import { recordSSEConnect, recordSSEDisconnect } from "@/lib/otel/metrics";
 
 const HEARTBEAT_INTERVAL = 15_000;
 
@@ -10,6 +11,8 @@ export async function GET() {
 
   const stream = new ReadableStream({
     start(controller) {
+      recordSSEConnect();
+
       // Send initial state
       const initial: SSEEvent = {
         type: SESSION_EVENT_TYPES.PIPELINE_STATE_CHANGE,
@@ -48,6 +51,7 @@ export async function GET() {
       }, HEARTBEAT_INTERVAL);
 
       cleanupFn = () => {
+        recordSSEDisconnect();
         clearInterval(heartbeat);
         unsubscribe();
       };

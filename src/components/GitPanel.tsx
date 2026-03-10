@@ -214,6 +214,8 @@ export function GitPanel({ onClose }: GitPanelProps) {
         animate="visible"
         exit="exit"
         className="flex h-[72vh] w-[720px] max-w-[92vw] flex-col overflow-hidden rounded-2xl border border-border-subtle shadow-elevation-2"
+        role="dialog"
+        aria-modal="true"
         style={{ background: "rgba(20, 21, 31, 0.92)", backdropFilter: "blur(24px)", WebkitBackdropFilter: "blur(24px)" }}
       >
         {/* ── Header ──────────────────────────────────────────────── */}

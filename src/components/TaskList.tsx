@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { Task, Severity, TaskStatus } from "@/lib/types";
 import { SEVERITIES, TASK_STATUSES } from "@/lib/types";
@@ -45,6 +45,22 @@ const DONE_STATUSES = new Set<TaskStatus>([TASK_STATUSES.RESOLVED, TASK_STATUSES
 
 const SPRING = { type: "spring" as const, stiffness: 400, damping: 30 };
 const STAGGER = { staggerChildren: 0.04 };
+
+const TASK_PREFS_KEY = "endstate-task-prefs";
+
+function loadTaskPrefs(): { sortBy: SortKey; filterSeverity: FilterSeverity; filterStatus: FilterStatus } | null {
+  try {
+    const raw = localStorage.getItem(TASK_PREFS_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch { return null; }
+}
+
+function saveTaskPrefs(sortBy: SortKey, filterSeverity: FilterSeverity, filterStatus: FilterStatus) {
+  try {
+    localStorage.setItem(TASK_PREFS_KEY, JSON.stringify({ sortBy, filterSeverity, filterStatus }));
+  } catch { /* SSR or storage full */ }
+}
 
 // ─── Status Icon Component ──────────────────────────────────────────────────
 
@@ -104,10 +120,14 @@ interface TaskListProps {
 }
 
 export function TaskList({ tasks, onSelectTask, onRefreshTasks }: TaskListProps) {
-  const [sortBy, setSortBy] = useState<SortKey>("severity");
-  const [filterSeverity, setFilterSeverity] = useState<FilterSeverity>("ALL");
-  const [filterStatus, setFilterStatus] = useState<FilterStatus>("ALL");
+  const [sortBy, setSortBy] = useState<SortKey>(() => loadTaskPrefs()?.sortBy ?? "severity");
+  const [filterSeverity, setFilterSeverity] = useState<FilterSeverity>(() => loadTaskPrefs()?.filterSeverity ?? "ALL");
+  const [filterStatus, setFilterStatus] = useState<FilterStatus>(() => loadTaskPrefs()?.filterStatus ?? "ALL");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    saveTaskPrefs(sortBy, filterSeverity, filterStatus);
+  }, [sortBy, filterSeverity, filterStatus]);
   const [showAddForm, setShowAddForm] = useState(false);
   const [addTitle, setAddTitle] = useState("");
   const [addSeverity, setAddSeverity] = useState<Severity>(SEVERITIES.MEDIUM);

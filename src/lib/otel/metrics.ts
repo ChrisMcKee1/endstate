@@ -65,6 +65,21 @@ export const fixerBuildsFail = meter.createCounter("fixer.builds.fail", {
   description: "Build failures",
 });
 
+// ─── SSE & API Metrics ────────────────────────────────────────────────────
+
+export const sseActiveConnections = meter.createUpDownCounter("sse.connections.active", {
+  description: "Currently active SSE connections",
+});
+
+export const sseReconnections = meter.createCounter("sse.reconnections.total", {
+  description: "Total SSE reconnections",
+});
+
+export const apiRouteLatency = meter.createHistogram("api.route.latency.ms", {
+  description: "API route response latency in milliseconds",
+  unit: "ms",
+});
+
 // ─── UX Gauges ────────────────────────────────────────────────────────────────
 
 export const uxScoreNavigation = meter.createGauge("ux.score.navigation", {
@@ -111,6 +126,9 @@ export interface MetricsSnapshot {
   buildsFail: number;
   uxScores: Record<string, number>;
   modelMaxContextTokens: number;
+  sseActiveConnections: number;
+  sseReconnections: number;
+  apiRouteLatencies: Record<string, number[]>;
 }
 
 const snapshot: MetricsSnapshot = {
@@ -127,6 +145,9 @@ const snapshot: MetricsSnapshot = {
   buildsFail: 0,
   uxScores: {},
   modelMaxContextTokens: 0,
+  sseActiveConnections: 0,
+  sseReconnections: 0,
+  apiRouteLatencies: {},
 };
 
 export function getMetricsSnapshot(): MetricsSnapshot {
@@ -197,6 +218,36 @@ export function recordBuildPass(): void {
 export function recordBuildFail(): void {
   snapshot.buildsFail++;
   fixerBuildsFail.add(1);
+}
+
+export function recordSSEConnect(): void {
+  snapshot.sseActiveConnections++;
+  sseActiveConnections.add(1);
+}
+
+export function recordSSEDisconnect(): void {
+  snapshot.sseActiveConnections--;
+  sseActiveConnections.add(-1);
+}
+
+export function recordSSEReconnection(): void {
+  snapshot.sseReconnections++;
+  sseReconnections.add(1);
+}
+
+export function recordApiLatency(route: string, ms: number): void {
+  if (!snapshot.apiRouteLatencies[route]) snapshot.apiRouteLatencies[route] = [];
+  const arr = snapshot.apiRouteLatencies[route];
+  arr.push(ms);
+  if (arr.length > 100) arr.shift();
+  apiRouteLatency.record(ms, { route });
+}
+
+export function withApiTiming<T>(route: string, fn: () => Promise<T>): Promise<T> {
+  const start = performance.now();
+  return fn().finally(() => {
+    recordApiLatency(route, performance.now() - start);
+  });
 }
 
 export function recordUxScore(category: string, score: number): void {
