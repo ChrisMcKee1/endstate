@@ -181,7 +181,7 @@ For each concept, find the visual pattern that mirrors its behavior:
 
 | If the concept... | Use this pattern |
 |-------------------|------------------|
-| Spawns multiple outputs | **Fan-out** (radial arrows from center) |
+| Spawns multiple outputs | **Fan-out** (vertical trunk + horizontal branches) |
 | Combines inputs into one | **Convergence** (funnel, arrows merging) |
 | Has hierarchy/nesting | **Tree** (lines + free-floating text) |
 | Is a sequence of steps | **Timeline** (line + dots + free-floating labels) |
@@ -197,11 +197,130 @@ For multi-concept diagrams: **each major concept must use a different visual pat
 ### Step 4: Sketch the Flow
 Before JSON, mentally trace how the eye moves through the diagram. There should be a clear visual story.
 
-### Step 5: Generate JSON
+### Step 5: Calculate Text Sizing (BEFORE generating JSON)
+For every text element, calculate the required width and height using the sizing table in `references/element-templates.md`. Then size containers to fit. Do NOT guess — clipped text is the #1 visual defect.
+
+### Step 6: Generate JSON
 Only now create the Excalidraw elements. **See below for how to handle large diagrams.**
 
-### Step 6: Render & Validate (MANDATORY)
+Use `"viewBackgroundColor": "#181926"` in appState for dark mode (default).
+
+### Step 7: Render & Validate (MANDATORY)
 After generating the JSON, you MUST run the render-view-fix loop until the diagram looks right. This is not optional — see the **Render & Validate** section below for the full process.
+
+---
+
+## Text Sizing (CRITICAL — Read Before Any JSON)
+
+**Excalidraw clips text that exceeds its container width.** This is the most common diagram defect. You MUST calculate sizes before writing JSON.
+
+### Character Width Reference (fontFamily: 3, monospace)
+
+| Font Size | Width per Char | Line Height |
+|-----------|---------------|-------------|
+| 28px | ~17px | ~35px |
+| 20px | ~12px | ~25px |
+| 18px | ~11px | ~23px |
+| 16px | ~9.5px | ~20px |
+| 14px | ~8.4px | ~18px |
+| 13px | ~7.8px | ~17px |
+| 12px | ~7.2px | ~15px |
+| 11px | ~6.6px | ~14px |
+| 10px | ~6px | ~13px |
+
+### Container Sizing Formulas
+
+| Container Type | Width Formula | Why |
+|---------------|--------------|-----|
+| **Free-floating text** | `charCount × charWidth + 20` | Buffer for rendering variance |
+| **Rectangle** | `textWidth + 40` (20px padding each side) | Must clear the stroke on both edges |
+| **Ellipse** | `textWidth + 60` (30px padding each side) | Ellipse curvature clips more than rectangles |
+| **Diamond** | `textWidth × 2.2` | Diamond's usable text area is only ~45% of its bounding box |
+
+### Example Calculations
+
+- `"Explorer"` at 18px: 8 chars × 11px = 88px → rectangle ≥ 128px wide
+- `"Analyst-Database"` at 13px: 16 chars × 7.8px = 125px → rectangle ≥ 165px wide
+- `"Consolidator"` at 13px: 12 chars × 7.8px = 94px → diamond ≥ 207px wide (94 × 2.2)
+- `"GET / POST / PUT / DELETE"` at 11px: 25 chars × 6.6px = 165px → free text ≥ 185px wide
+
+### Arrow Routing (CRITICAL — Read Before Drawing Any Arrows)
+
+Arrows define relationships. Sloppy arrows — crossing shapes, bundling together, cutting through text — destroy diagram clarity. These rules are non-negotiable.
+
+#### Routing Principles
+
+- **Never route an arrow through text, through a shape, or across another arrow** — every crossing is visual noise
+- **Use 4-point L-bend routing** for fan-out and convergence — not diagonal lines
+- **Shared vertical/horizontal trunks** create cleaner routing than individual diagonal lines
+- **Arrows should have clear whitespace** between them when running parallel
+
+#### Fan-Out Pattern: Vertical Trunk + Horizontal Branches
+
+When one element connects to multiple targets stacked vertically (e.g., Explorer → 4 domain rows), **do NOT draw 4 diagonal arrows**. Instead, use an L-shaped bus pattern:
+
+```
+All arrows share a single vertical channel to the left or right,
+then branch horizontally to their target at each row:
+
+  [Source] ←── all start from same edge point
+     │
+     │  ← vertical trunk (far left or right of diagram)
+     │
+     ├──→ [Target 1]     ← horizontal branch at row 1
+     │
+     ├──→ [Target 2]     ← horizontal branch at row 2
+     │
+     ├──→ [Target 3]     ← horizontal branch at row 3
+     │
+     └──→ [Target 4]     ← horizontal branch at row 4
+```
+
+**Implementation with 4-point arrows:**
+Each arrow has `points: [[0,0], [trunkX,0], [trunkX,targetY], [endX,targetY]]`
+
+1. **Point 0** `[0, 0]` — starts at source shape edge
+2. **Point 1** `[-trunkOffset, 0]` — goes horizontally to the trunk channel (negative = left, positive = right)
+3. **Point 2** `[-trunkOffset, rowY]` — goes vertically down/up the trunk to the target's row
+4. **Point 3** `[-trunkOffset + branchLen, rowY]` — goes horizontally from trunk to target
+
+**Example** (Explorer at x=355,y=232 → 4 domain rows spaced 60px apart):
+```json
+// Arrow to UI row (y offset = 121.5):
+"points": [[0, 0], [-355, 0], [-355, 121.5], [-320, 121.5]]
+
+// Arrow to Backend row (y offset = 181.5):
+"points": [[0, 0], [-355, 0], [-355, 181.5], [-320, 181.5]]
+
+// Arrow to Database row (y offset = 241.5):
+"points": [[0, 0], [-355, 0], [-355, 241.5], [-320, 241.5]]
+
+// Arrow to Docs row (y offset = 301.5):
+"points": [[0, 0], [-355, 0], [-355, 301.5], [-320, 301.5]]
+```
+
+All 4 arrows start from the SAME point on Explorer (`focus: 0, gap: 0`), share the trunk at `x=-355` (relative), and branch right by 35px at each row. This creates a clean vertical bus.
+
+#### Cycle/Loop Arrows: Route Around Everything
+
+Loop-back arrows (e.g., UX Reviewer → Explorer) must route through **clear space on the far right**, never through the diagram's content area:
+
+```json
+// Start at right edge of UX Reviewer, route right, up, and left to Explorer:
+"points": [[0, 0], [668, 0], [668, -637], [304, -637]]
+```
+
+Pattern: `→ right` (clear of all content), `↑ up` (full height of diagram), `← left` (back to target).
+
+#### Convergence: Same Pattern, Reversed
+
+When multiple sources converge to one target, use the mirror of the fan-out pattern — horizontal branch from each source into a shared vertical trunk, then the trunk connects to the target.
+
+#### Bindings
+
+- Fan-out arrows from same source: all use `focus: 0, gap: 0` on the start binding (same edge point)
+- End bindings to target elements: `focus: 0, gap: 0` (center of target)
+- This keeps all arrows neat at their anchor points
 
 ---
 
@@ -254,21 +373,32 @@ Each section should be independently understandable: its elements, internal arro
 ## Visual Pattern Library
 
 ### Fan-Out (One-to-Many)
-Central element with arrows radiating to multiple targets. Use for: sources, PRDs, root causes, central hubs.
+Central element with arrows routing to multiple targets via a shared vertical trunk. Use for: sources, PRDs, root causes, central hubs.
+
+**Implementation**: Use 4-point L-bend arrows, NOT diagonal lines. All arrows start from the same point on the source, route to a vertical trunk, then branch horizontally to each target. See Arrow Routing section above for the exact point pattern.
+
 ```
-        ○
-       ↗
-  □ → ○
-       ↘
-        ○
+                    [Source]
+                       │
+  ┌────────────────────┘  (all arrows go left to trunk)
+  │
+  ├──→ [Target 1]
+  │
+  ├──→ [Target 2]
+  │
+  ├──→ [Target 3]
+  │
+  └──→ [Target 4]
 ```
 
 ### Convergence (Many-to-One)
-Multiple inputs merging through arrows to single output. Use for: aggregation, funnels, synthesis.
+Multiple inputs merging through arrows to single output. Use for: aggregation, funnels, synthesis. Mirror of fan-out — horizontal branches into shared vertical trunk, then to target.
 ```
-  ○ ↘
-  ○ → □
-  ○ ↗
+  [Source 1] ──→─┐
+                 │
+  [Source 2] ──→─┤  (shared trunk)
+                 │
+  [Source 3] ──→─┘──→ [Target]
 ```
 
 ### Tree (Hierarchy)
@@ -431,12 +561,14 @@ Settings: `fontSize: 16`, `fontFamily: 3`, `textAlign: "center"`, `verticalAlign
   "source": "https://excalidraw.com",
   "elements": [...],
   "appState": {
-    "viewBackgroundColor": "#ffffff",
+    "viewBackgroundColor": "#181926",
     "gridSize": 20
   },
   "files": {}
 }
 ```
+
+**Dark mode is the default.** Use `#181926` for canvas background. The render template respects this value.
 
 ## Element Templates
 
