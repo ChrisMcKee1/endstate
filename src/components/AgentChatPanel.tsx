@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { AgentRole } from "@/lib/types";
 import type { StreamEntry } from "@/components/Dashboard";
+import { MarkdownRenderer } from "@/components/MarkdownRenderer";
 import { getAgentVisual } from "@/lib/agent-visuals";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -233,8 +234,8 @@ export function AgentChatPanel({
                         </AnimatePresence>
                       </div>
                     ) : (
-                      <span
-                        className={`whitespace-pre-wrap break-words font-mono text-xs leading-relaxed ${
+                      <div
+                        className={`break-words text-xs leading-relaxed ${
                           entry.type === "reasoning"
                             ? "italic text-text-muted"
                             : isError
@@ -242,7 +243,11 @@ export function AgentChatPanel({
                               : "text-text-primary/90"
                         }`}
                       >
-                        {entry.content}
+                        {entry.type === "message" ? (
+                          <MarkdownRenderer content={entry.content} compact />
+                        ) : (
+                          <span className="whitespace-pre-wrap font-mono">{entry.content}</span>
+                        )}
                         {entry.type === "message" && isActive && entry === entries[entries.length - 1] && (
                           <motion.span
                             animate={{ opacity: [1, 0, 1] }}
@@ -251,7 +256,7 @@ export function AgentChatPanel({
                             style={{ backgroundColor: meta.color }}
                           />
                         )}
-                      </span>
+                      </div>
                     )}
                   </div>
                 </div>

@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import type { Task, TaskEvent } from "@/lib/types";
 import { SEVERITIES } from "@/lib/types";
 import { FileDiffPreview } from "@/components/FileDiffPreview";
+import { MarkdownRenderer } from "@/components/MarkdownRenderer";
 import { getAgentVisual } from "@/lib/agent-visuals";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -256,9 +257,9 @@ export function TaskDetail({ task, onClose }: TaskDetailProps) {
                             {formatTimestamp(event.timestamp)}
                           </span>
                         </div>
-                        <p className="mt-1 text-xs text-text-secondary">
-                          {event.detail}
-                        </p>
+                        <div className="mt-1">
+                          <MarkdownRenderer content={event.detail} compact />
+                        </div>
                       </button>
 
                       {/* Expanded detail */}
@@ -297,9 +298,9 @@ export function TaskDetail({ task, onClose }: TaskDetailProps) {
                                   <span className="text-[10px] font-semibold text-text-muted">
                                     Reasoning:
                                   </span>
-                                  <p className="mt-0.5 text-xs italic text-text-secondary">
-                                    {event.reasoning}
-                                  </p>
+                                  <div className="mt-0.5 text-xs italic text-text-secondary">
+                                    <MarkdownRenderer content={event.reasoning} compact />
+                                  </div>
                                 </div>
                               )}
                               {event.diff && (

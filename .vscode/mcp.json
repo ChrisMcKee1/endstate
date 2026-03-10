@@ -11,6 +11,10 @@
 			},
 			"gallery": "https://api.mcp.github.com",
 			"version": "1.0.31"
+		},
+		"excalidraw": {
+			"url": "https://mcp.excalidraw.com",
+			"type": "http"
 		}
 	},
 	"inputs": [

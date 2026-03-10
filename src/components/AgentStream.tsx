@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { AgentRole } from "@/lib/types";
 import type { StreamEntry } from "@/components/Dashboard";
+import { MarkdownRenderer } from "@/components/MarkdownRenderer";
 import { getAgentVisual } from "@/lib/agent-visuals";
 
 const TYPE_ICONS: Record<StreamEntry["type"], string> = {
@@ -216,8 +217,8 @@ export function AgentStream({ entries, activeAgent }: AgentStreamProps) {
                 </AnimatePresence>
               </div>
             ) : (
-              <span
-                className={`whitespace-pre-wrap break-words font-mono text-xs leading-relaxed phosphor-text ${
+              <div
+                className={`break-words text-xs leading-relaxed phosphor-text ${
                   isUserMessage
                     ? "font-semibold text-accent"
                     : entry.type === "reasoning"
@@ -227,7 +228,11 @@ export function AgentStream({ entries, activeAgent }: AgentStreamProps) {
                         : "text-text-primary/90"
                 }`}
               >
-                {isUserMessage ? entry.content.replace(/^\[YOU\]\s*/, "") : entry.content}
+                {entry.type === "message" && !isUserMessage ? (
+                  <MarkdownRenderer content={entry.content} compact />
+                ) : (
+                  <span className="whitespace-pre-wrap font-mono">{isUserMessage ? entry.content.replace(/^\[YOU\]\s*/, "") : entry.content}</span>
+                )}
                 {entry.type === "message" && isActive && (
                   <motion.span
                     animate={{ opacity: [1, 0, 1] }}
@@ -235,7 +240,7 @@ export function AgentStream({ entries, activeAgent }: AgentStreamProps) {
                     className="ml-0.5 inline-block h-3.5 w-[2px] bg-accent"
                   />
                 )}
-              </span>
+              </div>
             )}
           </div>
         </motion.div>

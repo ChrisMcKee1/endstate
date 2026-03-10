@@ -28,6 +28,7 @@ import { CelebrationEffects } from "@/components/CelebrationEffects";
 import { GitPanel } from "@/components/GitPanel";
 import { TokenUsageDisplay } from "@/components/TokenUsageDisplay";
 import { AwardsPanel } from "@/components/AwardsPanel";
+import { ProjectKnowledge } from "@/components/ProjectKnowledge";
 import { getAgentVisual } from "@/lib/agent-visuals";
 
 // ─── Stream entry type (UI-only) ──────────────────────────────────────────────
@@ -61,10 +62,11 @@ const INITIAL_STATE: PipelineState = {
   tasksSummary: { total: 0, open: 0, inProgress: 0, resolved: 0, deferred: 0 },
 };
 
-const SIDEBAR_TABS = ["tasks", "ux", "metrics", "awards"] as const;
+const SIDEBAR_TABS = ["knowledge", "tasks", "ux", "metrics", "awards"] as const;
 type SidebarTab = (typeof SIDEBAR_TABS)[number];
 
 const TAB_LABELS: Record<SidebarTab, string> = {
+  knowledge: "Intel",
   tasks: "Tasks",
   ux: "UX",
   metrics: "Metrics",
@@ -771,6 +773,12 @@ export function Dashboard({ config }: DashboardProps) {
                 />
               )}
               {activeTab === "awards" && <AwardsPanel />}
+              {activeTab === "knowledge" && (
+                <ProjectKnowledge
+                  projectPath={currentConfig.projectPath}
+                  isRunning={isRunning}
+                />
+              )}
             </ErrorBoundary>
           </div>
         </div>

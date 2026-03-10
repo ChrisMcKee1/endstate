@@ -263,6 +263,12 @@ body {
   box-shadow: 0 0 20px rgba(0, 229, 255, 0.1), 0 0 60px rgba(0, 229, 255, 0.05);
 }
 
+/* ─── Markdown Rendering ────────────────────────────────────────────────── */
+
+.markdown-content :where(p, ul, ol, pre, table, blockquote):last-child {
+  margin-bottom: 0;
+}
+
 .glow-cyan {
   box-shadow: var(--shadow-glow-cyan);
 }
