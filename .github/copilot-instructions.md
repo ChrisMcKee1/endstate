@@ -44,6 +44,14 @@ An autonomous development tool that uses the **GitHub Copilot SDK (TypeScript)**
 | Fixer | Filesystem, GitHub, shell | Apply code fixes, verify builds, commit to branches, revert on failure |
 | UX Reviewer | Playwright | Evaluate from a non-technical user perspective, score UX categories |
 
+### Project Knowledge (Cheat Sheet)
+- The **Researcher agent** runs once at pipeline start and produces a project cheat sheet.
+- The cheat sheet is **not a task** — it's a persistent knowledge artifact stored separately.
+- Stored in-memory + persisted to `.projects/<slug>/cheat-sheet.md` (survives restarts).
+- **Injected into all downstream agent system prompts** via `loadSystemPrompt()` in `agents.ts`.
+- Editable at any time via the **Intel tab** in the dashboard sidebar (`/api/knowledge` CRUD).
+- Uses delimited markers (`---CHEAT-SHEET-START---` / `---CHEAT-SHEET-END---`) for extraction.
+
 ## Project Structure
 
 ```
@@ -53,17 +61,26 @@ src/
 │   ├── setup/page.tsx                 # Setup wizard
 │   └── api/
 │       ├── pipeline/{start,stop,steer,stream}/route.ts
+│       ├── knowledge/route.ts         # Cheat sheet CRUD (GET/POST/PUT/DELETE)
 │       ├── models/route.ts
 │       ├── tasks/route.ts
 │       └── settings/route.ts
 ├── lib/
 │   ├── copilot/                       # SDK singleton, session factory, tools
-│   │   └── instructions/             # Markdown system prompts per agent
-│   ├── pipeline/                      # Orchestrator, task store, steering queue
+│   │   ├── agents/                    # Markdown system prompts per agent role
+│   │   └── prompts/                   # Shared base prompt (_base.md)
+│   ├── pipeline/                      # Orchestrator, task store, cheat-sheet-store, steering
 │   ├── otel/                          # OTel setup, spans, metrics
 │   └── types.ts                       # Task, TaskEvent, PipelineConfig interfaces
-├── components/                        # Dashboard, WorkflowGraph, AgentStream, etc.
-.projects/                             # Per-project data (tasks, config) — gitignored
+├── components/
+│   ├── MarkdownRenderer.tsx           # Reusable markdown renderer (memo'd, themed)
+│   ├── ProjectKnowledge.tsx           # Intel tab — cheat sheet view/edit/delete
+│   ├── Dashboard.tsx                  # Main coordinator with sidebar tabs
+│   └── ...                            # WorkflowGraph, AgentStream, TaskList, etc.
+├── hooks/
+│   └── useSSE.ts                      # SSE subscription hook
+docs/                                  # Developer documentation (use subfolders by topic)
+.projects/                             # Per-project data (tasks, config, cheat-sheet) — gitignored
 ```
 
 ## Coding Conventions
@@ -89,14 +106,35 @@ src/
 - API routes return `NextResponse.json()` with appropriate status codes.
 - SSE streams use `ReadableStream` in route handlers.
 
+### React
+- Use `memo()` for components that receive stable props but live under frequently re-rendering parents (e.g., stream entries, markdown renders).
+- Use `useMemo()` for expensive computations (markdown parsing, filtered lists).
+- Use `useCallback()` for event handlers passed as props to prevent child re-renders.
+- Use `useTransition()` for non-urgent async mutations (save/delete) to keep the UI responsive.
+- Use callback refs (not `setTimeout`) for focus management after conditional renders.
+- Use `AbortController` with `useEffect` cleanup for all fetch calls to prevent state updates on unmounted components.
+- Hoist static objects (animation variants, component maps, plugins arrays) to **module scope** — never allocate inside render.
+- Add proper ARIA attributes: `role="region"`, `aria-label`, `aria-modal`, `role="alert"` for errors.
+
 ### Frontend
 - Tailwind utility classes — no CSS modules, no styled-components.
 - Dashboard layout is **fixed viewport, no page scroll**. Individual panels scroll internally.
 - Use `canvas-confetti` for celebration effects (milestones, convergence).
 - Prefer bold, intentional design over generic AI aesthetics (see `frontend-design` skill).
+- **Markdown rendering**: Use `MarkdownRenderer` component for all agent-generated content. It uses Endstate design tokens (not generic styles). Pass `compact` for stream/chat contexts.
+- **Theming**: All components must use design tokens from `globals.css` (`text-text-primary`, `bg-overlay`, `border-border-subtle`, `text-accent`, `bg-glass-cyan`, `shadow-elevation-1`, etc.). Never use raw hex colors in components.
+
+### Documentation
+- **All developer documentation lives in `docs/`.** When writing or updating docs, place them here — not in the repo root or scattered across `src/`.
+- **Use subfolders to organize by topic.** Group related docs under directories (e.g., `docs/architecture/`, `docs/guides/`, `docs/api/`). Don't dump everything flat into `docs/`.
+- **Keep docs current.** When you add a feature, change an API, or modify architecture, update the relevant doc in the same PR. Stale docs are worse than no docs.
+- **Diagrams over walls of text.** Use the `excalidraw-diagram-skill` to create `.excalidraw` diagrams that visually argue architecture, data flow, pipeline stages, and system interactions. Diagrams should be committed alongside the docs they support (e.g., `docs/architecture/pipeline-flow.excalidraw`).
+- **Excalidraw for visualization.** When documenting architecture, agent workflows, data flow, or system design, generate Excalidraw diagrams to make the concepts tangible. Diagrams should *argue* — show relationships, causality, and flow that prose alone can't convey. Use the skill's visual pattern library (fan-out, convergence, timeline, assembly line) to match diagram structure to conceptual structure.
+- **Reference diagrams from markdown.** Link to `.excalidraw` files from the markdown docs so readers know visual references exist.
 
 ### State & Persistence
 - Task store is in-memory with JSON file persistence to `.projects/<slug>/tasks/{task-id}.json`.
+- Cheat sheet store is in-memory + `.projects/<slug>/cheat-sheet.md` on disk (write-through cache).
 - Pipeline config persists to `.projects/<slug>/config.json` (and mirrored to `.agentic-dev.json` in the target project root).
 - Project resolution via `src/lib/pipeline/project-resolver.ts` — handles slugging, active project tracking, and legacy migration.
 - No database. No ORM.
@@ -159,7 +197,12 @@ All 40+ session event types are forwarded to the frontend via SSE from `/api/pip
 ## Reference
 
 - Master spec: [.spec/Agentic-App-Dev-Master-Spec.md](../.spec/Agentic-App-Dev-Master-Spec.md)
+- Architecture guide: [docs/architecture.md](../docs/architecture.md)
+- Project Knowledge system: [docs/project-knowledge.md](../docs/project-knowledge.md)
+- Markdown rendering: [docs/markdown-rendering.md](../docs/markdown-rendering.md)
+- Configuration reference: [docs/configuration.md](../docs/configuration.md)
 - Copilot SDK skill: [.github/skills/copilot-sdk/](skills/copilot-sdk/)
 - Next.js patterns: [.github/skills/next-best-practices/](skills/next-best-practices/)
 - Frontend design: [.github/skills/frontend-design/](skills/frontend-design/)
 - Playwright automation: [.github/skills/playwright-cli/](skills/playwright-cli/)
+- Excalidraw diagrams: [.github/skills/excalidraw-diagram-skill/](skills/excalidraw-diagram-skill/)
