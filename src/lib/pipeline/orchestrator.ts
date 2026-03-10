@@ -6,6 +6,11 @@ import { getAllTasks, getTaskCount, clearAllTasks } from "@/lib/pipeline/task-st
 import { clearCheatSheet } from "@/lib/pipeline/cheat-sheet-store";
 import { clearAwards } from "@/lib/pipeline/award-store";
 import {
+  createWorktree,
+  mergeWorktree,
+  cleanupAllWorktrees,
+} from "@/lib/pipeline/worktree-manager";
+import {
   recordCycleComplete,
   recordAgentTurn,
   recordAgentLatency,
@@ -33,6 +38,8 @@ import {
   TASK_STATUSES,
   GRAPH_NODE_TYPES,
   DEFAULT_AGENT_GRAPH,
+  isFixerRole,
+  getDomainFromRole,
 } from "@/lib/types";
 
 // ─── Severity ordering for threshold filtering ───────────────────────────────
@@ -61,6 +68,7 @@ let currentState: PipelineState = {
 
 let abortController: AbortController | null = null;
 let activeSession: { abort: () => Promise<void>; destroy: () => Promise<void> } | null = null;
+let activeConfig: PipelineConfig | null = null;
 
 // ─── SSE broadcasting ────────────────────────────────────────────────────────
 
@@ -151,6 +159,7 @@ async function runAgent(
   config: PipelineConfig,
   cycle: number,
   signal: AbortSignal,
+  overrides?: { workingDirectory?: string },
 ): Promise<void> {
   if (signal.aborted) return;
 
@@ -171,7 +180,7 @@ async function runAgent(
   const startTime = Date.now();
 
   try {
-    const session = await createAgentSession(role, config);
+    const session = await createAgentSession(role, config, overrides);
     activeSession = session;
 
     if (signal.aborted) {
@@ -300,9 +309,18 @@ async function executeLayer(
   cycle: number,
   signal: AbortSignal,
 ): Promise<void> {
-  // Separate parallel-eligible nodes from sequential ones
-  const parallel = nodes.filter((n) => n.parallel);
-  const sequential = nodes.filter((n) => !n.parallel);
+  // When worktree isolation is enabled, fixers can run in parallel
+  // because each gets its own isolated worktree directory.
+  const useWorktrees = config.enableWorktreeIsolation;
+
+  // Separate parallel-eligible nodes from sequential ones.
+  // Fixers become parallel-eligible when worktree isolation is on.
+  const parallel = nodes.filter((n) =>
+    n.parallel || (useWorktrees && isFixerRole(n.role)),
+  );
+  const sequential = nodes.filter((n) =>
+    !n.parallel && !(useWorktrees && isFixerRole(n.role)),
+  );
 
   // Run parallel nodes concurrently
   if (parallel.length > 1) {
@@ -310,7 +328,28 @@ async function executeLayer(
       parallel.map(async (node) => {
         if (signal.aborted || currentState.status === PIPELINE_STATUSES.STOPPED) return;
         if (!isAgentEnabled(node.role, config)) return;
-        await runAgent(node.role, config, cycle, signal);
+
+        // Create worktree for fixer agents so they don't conflict
+        let overrides: { workingDirectory?: string } | undefined;
+        if (useWorktrees && isFixerRole(node.role)) {
+          const domain = getDomainFromRole(node.role);
+          if (domain) {
+            try {
+              const wtPath = await createWorktree(config.projectPath, domain, cycle);
+              overrides = { workingDirectory: wtPath };
+            } catch (err) {
+              // If worktree creation fails, fall back to main directory
+              broadcast({
+                type: SESSION_EVENT_TYPES.SESSION_ERROR,
+                timestamp: new Date().toISOString(),
+                agent: node.role,
+                data: { error: `Worktree creation failed, using main directory: ${err instanceof Error ? err.message : String(err)}` },
+              });
+            }
+          }
+        }
+
+        await runAgent(node.role, config, cycle, signal, overrides);
         refreshTasksSummary();
       }),
     );
@@ -327,6 +366,27 @@ async function executeLayer(
   for (const node of sequential) {
     if (signal.aborted || currentState.status === PIPELINE_STATUSES.STOPPED) break;
     if (!isAgentEnabled(node.role, config)) continue;
+
+    // Consolidator: merge all worktrees before running
+    if (useWorktrees && node.role === AGENT_ROLES.CONSOLIDATOR) {
+      const domains = ["ui", "backend", "database", "docs"] as const;
+      for (const domain of domains) {
+        try {
+          const result = await mergeWorktree(config.projectPath, domain);
+          if (result.conflicts) {
+            broadcast({
+              type: SESSION_EVENT_TYPES.SESSION_ERROR,
+              timestamp: new Date().toISOString(),
+              agent: AGENT_ROLES.CONSOLIDATOR,
+              data: { error: `Merge conflict in ${domain} worktree — manual resolution may be needed` },
+            });
+          }
+        } catch {
+          // Worktree may not exist if that domain was disabled
+        }
+      }
+    }
+
     await runAgent(node.role, config, cycle, signal);
     refreshTasksSummary();
   }
@@ -436,6 +496,12 @@ async function runPipeline(config: PipelineConfig): Promise<void> {
     currentState.status = PIPELINE_STATUSES.STOPPED;
   }
   currentState.activeAgent = null;
+
+  // Clean up any remaining worktrees
+  if (config.enableWorktreeIsolation) {
+    await cleanupAllWorktrees(config.projectPath).catch(() => {});
+  }
+
   emitStateChange();
 }
 
@@ -448,6 +514,7 @@ export function startPipeline(config: PipelineConfig): string {
 
   const runId = uuid();
   abortController = new AbortController();
+  activeConfig = config;
 
   // Clear previous run state: tasks, cheat sheet, awards
   clearAllTasks();
@@ -490,6 +557,11 @@ export function stopPipeline(): void {
     abortController.abort();
     abortController = null;
   }
+  // Clean up worktrees
+  if (activeConfig?.enableWorktreeIsolation) {
+    cleanupAllWorktrees(activeConfig.projectPath).catch(() => {});
+  }
+  activeConfig = null;
   currentState.status = PIPELINE_STATUSES.STOPPED;
   currentState.activeAgent = null;
   emitStateChange();

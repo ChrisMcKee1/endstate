@@ -7,8 +7,9 @@ import type {
   TaskStatus,
   Severity,
   TaskEvent,
+  Domain,
 } from "@/lib/types";
-import { TASK_STATUSES, TASK_ACTIONS } from "@/lib/types";
+import { TASK_STATUSES, TASK_ACTIONS, DOMAINS } from "@/lib/types";
 import { projectTasksDir, getActiveProjectPath } from "./project-resolver";
 
 // ─── Per-project state ───────────────────────────────────────────────────────
@@ -67,6 +68,10 @@ function loadFromDisk(state: ProjectTaskState): void {
     try {
       const raw = fs.readFileSync(path.join(state.tasksDir, file), "utf-8");
       const task = JSON.parse(raw) as Task;
+      // Backfill domains for tasks created before the domains field existed
+      if (!task.domains) {
+        task.domains = inferDomains(task.component, task.files);
+      }
       state.tasks.set(task.id, task);
       // Keep counter in sync
       const num = parseInt(task.id.replace("TSK-", ""), 10);
@@ -75,6 +80,26 @@ function loadFromDisk(state: ProjectTaskState): void {
       // Skip corrupt files
     }
   }
+}
+
+// ─── Domain inference ────────────────────────────────────────────────────────
+
+const DOMAIN_KEYWORDS: Record<Domain, string[]> = {
+  [DOMAINS.UI]: ["frontend", "ui", "react", "component", "css", "tailwind", "layout", "page", "view", "form", "button", "modal", "ux", "style", "html", "tsx", "jsx"],
+  [DOMAINS.BACKEND]: ["backend", "api", "server", "route", "endpoint", "controller", "middleware", "auth", "handler", "service"],
+  [DOMAINS.DATABASE]: ["database", "db", "sql", "query", "schema", "migration", "model", "orm", "prisma", "drizzle", "table"],
+  [DOMAINS.DOCS]: ["docs", "documentation", "readme", "changelog", "guide", "tutorial", "comment", "jsdoc", ".md"],
+};
+
+function inferDomains(component: string, files?: string[]): Domain[] {
+  const text = [component, ...(files ?? [])].join(" ").toLowerCase();
+  const matched: Domain[] = [];
+  for (const [domain, keywords] of Object.entries(DOMAIN_KEYWORDS) as [Domain, string[]][]) {
+    if (keywords.some((kw) => text.includes(kw))) {
+      matched.push(domain);
+    }
+  }
+  return matched;
 }
 
 // ─── ID generation ───────────────────────────────────────────────────────────
@@ -112,6 +137,7 @@ export function createTask(input: TaskCreateInput, projectPath?: string): Task {
     cycle: input.cycle,
     files: input.files ?? [],
     tags: input.tags ?? [],
+    domains: input.domains?.length ? input.domains : inferDomains(input.component, input.files),
     timeline: [initialEvent],
     createdAt: now,
     updatedAt: now,

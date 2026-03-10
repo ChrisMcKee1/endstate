@@ -299,13 +299,13 @@ export function WorkflowGraph({
                     : isActive || isTraversed ? to.color
                     : "rgba(255,255,255,0.12)"
                 }
-                strokeWidth={isActive ? 2.5 : isTraversed ? 2 : 1}
+                strokeWidth={isActive ? 2.5 : isTraversed ? 1.5 : 0.5}
                 strokeDasharray={isActive ? "8 5" : "none"}
                 strokeLinecap="round"
                 initial={false}
                 animate={{
                   strokeDashoffset: isActive ? [-26, 0] : 0,
-                  strokeOpacity: !isDomainActive ? 0.08 : isActive ? 1 : isTraversed ? 0.7 : 0.15,
+                  strokeOpacity: !isDomainActive ? 0.06 : isActive ? 1 : isTraversed ? 0.4 : 0.1,
                 }}
                 transition={
                   isActive
@@ -365,7 +365,8 @@ export function WorkflowGraph({
         {/* ── Nodes ──────────────────────────────────────── */}
         {nodes.map((node) => {
           const isCurrent = activeSet.has(node.role) && isRunning;
-          const isCompleted = completedSet.has(node.role);
+          const isCompleted = completedSet.has(node.role) && !isCurrent;
+          const isIdle = !isCurrent && !isCompleted;
           const isSelected = selectedAgent === node.role;
           const nodeDomain = getDomainFromRole(node.role);
           const isDomainActive = !nodeDomain || activeDomainSet.size === 0 || activeDomainSet.has(nodeDomain);
@@ -406,19 +407,24 @@ export function WorkflowGraph({
               {/* Glass backdrop */}
               <circle cx={node.x} cy={node.y} r={NODE_RADIUS}
                 fill={isCurrent ? node.color : "rgba(20, 21, 31, 0.6)"}
-                fillOpacity={isCurrent ? 0.15 : 1}
-                stroke={isDimmed ? "rgba(255,255,255,0.06)" : isCompleted ? node.color : "rgba(255,255,255,0.12)"}
-                strokeWidth={isCurrent ? 2 : isCompleted ? 1.5 : 1}
+                fillOpacity={isCurrent ? 0.2 : 1}
+                stroke={
+                  isDimmed ? "rgba(255,255,255,0.06)"
+                    : isCurrent ? node.color
+                    : isCompleted ? node.color
+                    : "rgba(255,255,255,0.08)"
+                }
+                strokeWidth={isCurrent ? 2.5 : isCompleted ? 1.5 : 0.5}
                 strokeDasharray={isDimmed ? "4 3" : "none"} />
 
-              {/* Agent color fill */}
+              {/* Agent color fill — only visible when active or completed */}
               <circle cx={node.x} cy={node.y} r={NODE_RADIUS}
                 fill={node.color}
-                fillOpacity={isCurrent ? 0.15 : isCompleted ? 0.1 : 0.08}
+                fillOpacity={isCurrent ? 0.25 : isCompleted ? 0.12 : 0}
                 filter={isCurrent ? `url(#glow-${node.role})` : undefined} />
 
               {/* Icon */}
-              {isCompleted && !isCurrent ? (
+              {isCompleted ? (
                 <motion.g
                   transform={`translate(${node.x - 7}, ${node.y - 7})`}
                   initial={{ scale: 0, opacity: 0 }}
@@ -431,7 +437,7 @@ export function WorkflowGraph({
               ) : (
                 <g transform={`translate(${node.x - 8}, ${node.y - 8}) scale(0.667)`}>
                   <path d={node.icon} fill="none"
-                    stroke={isCurrent ? node.color : isCompleted ? node.color : "#B0BEC5"}
+                    stroke={isCurrent ? node.color : "rgba(176,190,197,0.35)"}
                     strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
                 </g>
               )}
@@ -439,9 +445,9 @@ export function WorkflowGraph({
               {/* Label */}
               <text x={node.x} y={node.y + NODE_RADIUS + 13}
                 textAnchor="middle"
-                fill={isCurrent ? node.color : isDimmed ? "rgba(176,190,197,0.3)" : "#B0BEC5"}
+                fill={isCurrent ? node.color : isCompleted ? node.color : isDimmed ? "rgba(176,190,197,0.2)" : "rgba(176,190,197,0.5)"}
                 fontSize={7} fontFamily="var(--font-body)"
-                letterSpacing="0.1em" fontWeight={isCurrent ? 700 : 500}>
+                letterSpacing="0.1em" fontWeight={isCurrent ? 700 : isCompleted ? 600 : 400}>
                 {node.label.toUpperCase()}
               </text>
             </g>

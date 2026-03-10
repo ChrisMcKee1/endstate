@@ -173,6 +173,8 @@ export interface Task {
   cycle: number;
   files: string[];
   tags: string[];
+  /** Workstream domains this task touches (ui, backend, database, docs) */
+  domains: Domain[];
   timeline: TaskEvent[];
   createdAt: string;
   updatedAt: string;
@@ -499,6 +501,8 @@ export interface TaskCreateInput {
   cycle: number;
   files?: string[];
   tags?: string[];
+  /** Workstream domains this task touches */
+  domains?: Domain[];
   agent: AgentRole;
   detail: string;
   expected?: string;

@@ -93,7 +93,7 @@ const DEFAULT_CONFIG: PipelineConfig = {
   enableDomainBackend: true,
   enableDomainDatabase: true,
   enableDomainDocs: true,
-  enableWorktreeIsolation: false,
+  enableWorktreeIsolation: true,
   agentGraph: [],
   skills: [],
   customAgentDefinitions: [],

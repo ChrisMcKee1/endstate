@@ -2,8 +2,8 @@
 
 import { useState, useMemo, useCallback, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import type { Task, Severity, TaskStatus } from "@/lib/types";
-import { SEVERITIES, TASK_STATUSES } from "@/lib/types";
+import type { Task, Severity, TaskStatus, Domain } from "@/lib/types";
+import { SEVERITIES, TASK_STATUSES, DOMAINS } from "@/lib/types";
 
 // ─── Severity styling ────────────────────────────────────────────────────────
 
@@ -46,9 +46,18 @@ const DONE_STATUSES = new Set<TaskStatus>([TASK_STATUSES.RESOLVED, TASK_STATUSES
 const SPRING = { type: "spring" as const, stiffness: 400, damping: 30 };
 const STAGGER = { staggerChildren: 0.04 };
 
+const ALL_DOMAINS = Object.values(DOMAINS) as Domain[];
+
+const DOMAIN_STYLES: Record<Domain, { label: string; color: string; bg: string }> = {
+  [DOMAINS.UI]: { label: "UI", color: "text-agent-explorer", bg: "bg-agent-explorer/15" },
+  [DOMAINS.BACKEND]: { label: "BE", color: "text-agent-analyst", bg: "bg-agent-analyst/15" },
+  [DOMAINS.DATABASE]: { label: "DB", color: "text-agent-violet", bg: "bg-agent-violet/15" },
+  [DOMAINS.DOCS]: { label: "Docs", color: "text-agent-ux", bg: "bg-agent-ux/15" },
+};
+
 const TASK_PREFS_KEY = "endstate-task-prefs";
 
-function loadTaskPrefs(): { sortBy: SortKey; filterSeverity: FilterSeverity; filterStatus: FilterStatus } | null {
+function loadTaskPrefs(): { sortBy: SortKey; filterSeverity: FilterSeverity; filterStatus: FilterStatus; filterDomains: Domain[] } | null {
   try {
     const raw = localStorage.getItem(TASK_PREFS_KEY);
     if (!raw) return null;
@@ -56,9 +65,9 @@ function loadTaskPrefs(): { sortBy: SortKey; filterSeverity: FilterSeverity; fil
   } catch { return null; }
 }
 
-function saveTaskPrefs(sortBy: SortKey, filterSeverity: FilterSeverity, filterStatus: FilterStatus) {
+function saveTaskPrefs(sortBy: SortKey, filterSeverity: FilterSeverity, filterStatus: FilterStatus, filterDomains: Domain[]) {
   try {
-    localStorage.setItem(TASK_PREFS_KEY, JSON.stringify({ sortBy, filterSeverity, filterStatus }));
+    localStorage.setItem(TASK_PREFS_KEY, JSON.stringify({ sortBy, filterSeverity, filterStatus, filterDomains }));
   } catch { /* SSR or storage full */ }
 }
 
@@ -123,11 +132,15 @@ export function TaskList({ tasks, onSelectTask, onRefreshTasks }: TaskListProps)
   const [sortBy, setSortBy] = useState<SortKey>(() => loadTaskPrefs()?.sortBy ?? "severity");
   const [filterSeverity, setFilterSeverity] = useState<FilterSeverity>(() => loadTaskPrefs()?.filterSeverity ?? "ALL");
   const [filterStatus, setFilterStatus] = useState<FilterStatus>(() => loadTaskPrefs()?.filterStatus ?? "ALL");
+  const [filterDomains, setFilterDomains] = useState<Set<Domain>>(() => {
+    const saved = loadTaskPrefs()?.filterDomains;
+    return saved?.length ? new Set(saved) : new Set<Domain>();
+  });
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    saveTaskPrefs(sortBy, filterSeverity, filterStatus);
-  }, [sortBy, filterSeverity, filterStatus]);
+    saveTaskPrefs(sortBy, filterSeverity, filterStatus, [...filterDomains]);
+  }, [sortBy, filterSeverity, filterStatus, filterDomains]);
   const [showAddForm, setShowAddForm] = useState(false);
   const [addTitle, setAddTitle] = useState("");
   const [addSeverity, setAddSeverity] = useState<Severity>(SEVERITIES.MEDIUM);
@@ -146,6 +159,16 @@ export function TaskList({ tasks, onSelectTask, onRefreshTasks }: TaskListProps)
     } else if (filterStatus === "DONE") {
       filtered = filtered.filter((t) => DONE_STATUSES.has(t.status));
     }
+    // Domain filter: task must match ALL selected domains
+    if (filterDomains.size > 0) {
+      filtered = filtered.filter((t) => {
+        const taskDomains = t.domains ?? [];
+        for (const d of filterDomains) {
+          if (!taskDomains.includes(d)) return false;
+        }
+        return true;
+      });
+    }
 
     return [...filtered].sort((a, b) => {
       switch (sortBy) {
@@ -159,7 +182,7 @@ export function TaskList({ tasks, onSelectTask, onRefreshTasks }: TaskListProps)
           return 0;
       }
     });
-  }, [tasks, sortBy, filterSeverity, filterStatus]);
+  }, [tasks, sortBy, filterSeverity, filterStatus, filterDomains]);
 
   const counts = useMemo(() => {
     const open = tasks.filter(
@@ -178,6 +201,14 @@ export function TaskList({ tasks, onSelectTask, onRefreshTasks }: TaskListProps)
     setSelectedIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const toggleDomain = useCallback((domain: Domain) => {
+    setFilterDomains((prev) => {
+      const next = new Set(prev);
+      if (next.has(domain)) next.delete(domain); else next.add(domain);
       return next;
     });
   }, []);
@@ -312,6 +343,36 @@ export function TaskList({ tasks, onSelectTask, onRefreshTasks }: TaskListProps)
           <option value="ACTIVE">Active</option>
           <option value="DONE">Done</option>
         </select>
+      </div>
+
+      {/* Domain filter chips */}
+      <div className="flex items-center gap-1.5 border-b border-border-subtle px-3 py-1.5" style={{ background: "rgba(20, 21, 31, 0.3)" }}>
+        <span className="text-[9px] uppercase tracking-widest text-text-muted/60 shrink-0">Domain</span>
+        {ALL_DOMAINS.map((domain) => {
+          const style = DOMAIN_STYLES[domain];
+          const isActive = filterDomains.has(domain);
+          return (
+            <button
+              key={domain}
+              onClick={() => toggleDomain(domain)}
+              className={`rounded-full px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider transition-all ${
+                isActive
+                  ? `${style.bg} ${style.color} ring-1 ring-current/20`
+                  : "bg-white/[0.03] text-text-muted/50 hover:bg-white/[0.06] hover:text-text-muted"
+              }`}
+            >
+              {style.label}
+            </button>
+          );
+        })}
+        {filterDomains.size > 0 && (
+          <button
+            onClick={() => setFilterDomains(new Set())}
+            className="ml-auto text-[9px] text-text-muted/50 hover:text-text-secondary"
+          >
+            Clear
+          </button>
+        )}
       </div>
 
       {/* Add task form */}
@@ -459,6 +520,21 @@ export function TaskList({ tasks, onSelectTask, onRefreshTasks }: TaskListProps)
                         <span className="font-mono text-[10px] text-text-muted/50">
                           C{task.cycle}
                         </span>
+                        {(task.domains ?? []).length > 0 && (
+                          <span className="flex items-center gap-1">
+                            {(task.domains ?? []).map((d) => {
+                              const ds = DOMAIN_STYLES[d];
+                              return (
+                                <span
+                                  key={d}
+                                  className={`rounded-full px-1.5 py-px text-[8px] font-bold uppercase ${ds.bg} ${ds.color}`}
+                                >
+                                  {ds.label}
+                                </span>
+                              );
+                            })}
+                          </span>
+                        )}
                         {task.files.length > 0 && (
                           <span className="text-[10px] text-text-muted/50">
                             {task.files.length} file{task.files.length > 1 ? "s" : ""}

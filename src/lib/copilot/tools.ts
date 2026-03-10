@@ -5,7 +5,7 @@ import {
   updateTask,
   getAllTasks,
 } from "@/lib/pipeline/task-store";
-import { SEVERITIES, TASK_STATUSES, AGENT_ROLES, TASK_ACTIONS } from "@/lib/types";
+import { SEVERITIES, TASK_STATUSES, AGENT_ROLES, TASK_ACTIONS, DOMAINS } from "@/lib/types";
 
 const severityEnum = z.enum([
   SEVERITIES.CRITICAL,
@@ -66,6 +66,9 @@ export const createTaskTool = defineTool("create_task", {
     actual: z.string().optional().describe("What actually happened"),
     files: z.array(z.string()).optional().describe("Affected file paths"),
     tags: z.array(z.string()).optional().describe("Free-form tags"),
+    domains: z.array(z.enum([DOMAINS.UI, DOMAINS.BACKEND, DOMAINS.DATABASE, DOMAINS.DOCS]))
+      .optional()
+      .describe("Workstream domains this task touches: ui, backend, database, docs. A task can belong to multiple domains."),
   }),
   handler: async (params, _invocation) => {
     const task = createTask(params);
