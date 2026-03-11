@@ -119,8 +119,12 @@ export interface MetricsSnapshot {
   agentTurns: Record<string, number>;
   agentInputTokens: Record<string, number>;
   agentOutputTokens: Record<string, number>;
+  agentCacheReadTokens: Record<string, number>;
+  agentCacheWriteTokens: Record<string, number>;
   toolInvocations: Record<string, number>;
   contextUsage: number;
+  contextTokenLimit: number;
+  contextCurrentTokens: number;
   compactions: number;
   buildsPass: number;
   buildsFail: number;
@@ -129,6 +133,10 @@ export interface MetricsSnapshot {
   sseActiveConnections: number;
   sseReconnections: number;
   apiRouteLatencies: Record<string, number[]>;
+  /** Cumulative premium requests from session.shutdown events */
+  totalPremiumRequests: number;
+  /** Cumulative code changes from session.shutdown events */
+  totalCodeChanges: { linesAdded: number; linesRemoved: number; filesModified: number };
 }
 
 const snapshot: MetricsSnapshot = {
@@ -138,8 +146,12 @@ const snapshot: MetricsSnapshot = {
   agentTurns: {},
   agentInputTokens: {},
   agentOutputTokens: {},
+  agentCacheReadTokens: {},
+  agentCacheWriteTokens: {},
   toolInvocations: {},
   contextUsage: 0,
+  contextTokenLimit: 0,
+  contextCurrentTokens: 0,
   compactions: 0,
   buildsPass: 0,
   buildsFail: 0,
@@ -148,6 +160,8 @@ const snapshot: MetricsSnapshot = {
   sseActiveConnections: 0,
   sseReconnections: 0,
   apiRouteLatencies: {},
+  totalPremiumRequests: 0,
+  totalCodeChanges: { linesAdded: 0, linesRemoved: 0, filesModified: 0 },
 };
 
 export function getMetricsSnapshot(): MetricsSnapshot {
@@ -177,12 +191,22 @@ export function recordAgentTurn(agent: string): void {
 export function recordAgentTokens(
   agent: string,
   input: number,
-  output: number
+  output: number,
+  cacheRead?: number,
+  cacheWrite?: number,
 ): void {
   snapshot.agentInputTokens[agent] =
     (snapshot.agentInputTokens[agent] ?? 0) + input;
   snapshot.agentOutputTokens[agent] =
     (snapshot.agentOutputTokens[agent] ?? 0) + output;
+  if (cacheRead) {
+    snapshot.agentCacheReadTokens[agent] =
+      (snapshot.agentCacheReadTokens[agent] ?? 0) + cacheRead;
+  }
+  if (cacheWrite) {
+    snapshot.agentCacheWriteTokens[agent] =
+      (snapshot.agentCacheWriteTokens[agent] ?? 0) + cacheWrite;
+  }
   agentTokensInput.add(input, { agent });
   agentTokensOutput.add(output, { agent });
 }
@@ -201,6 +225,15 @@ export function recordContextUsage(usage: number): void {
   sessionContextUsage.record(usage);
 }
 
+/** Update context window state from SDK session.usage_info event. */
+export function recordContextWindow(tokenLimit: number, currentTokens: number): void {
+  snapshot.contextTokenLimit = tokenLimit;
+  snapshot.contextCurrentTokens = currentTokens;
+  const usage = tokenLimit > 0 ? currentTokens / tokenLimit : 0;
+  snapshot.contextUsage = usage;
+  sessionContextUsage.record(usage);
+}
+
 export function setModelMaxContextTokens(tokens: number): void {
   snapshot.modelMaxContextTokens = tokens;
 }
@@ -208,6 +241,21 @@ export function setModelMaxContextTokens(tokens: number): void {
 export function recordCompaction(): void {
   snapshot.compactions++;
   sessionCompactionsTotal.add(1);
+}
+
+/** Record session shutdown metrics from SDK session.shutdown event. */
+export function recordSessionShutdown(data: {
+  premiumRequests?: number;
+  codeChanges?: { linesAdded: number; linesRemoved: number; filesModified: number };
+}): void {
+  if (data.premiumRequests) {
+    snapshot.totalPremiumRequests += data.premiumRequests;
+  }
+  if (data.codeChanges) {
+    snapshot.totalCodeChanges.linesAdded += data.codeChanges.linesAdded;
+    snapshot.totalCodeChanges.linesRemoved += data.codeChanges.linesRemoved;
+    snapshot.totalCodeChanges.filesModified += data.codeChanges.filesModified;
+  }
 }
 
 export function recordBuildPass(): void {

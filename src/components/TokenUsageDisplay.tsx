@@ -76,6 +76,8 @@ const ALL_VIEW_ROLES: string[] = [
 interface FullMetrics {
   agentInputTokens?: Record<string, number>;
   agentOutputTokens?: Record<string, number>;
+  agentCacheReadTokens?: Record<string, number>;
+  agentCacheWriteTokens?: Record<string, number>;
   agentTurns?: Record<string, number>;
   toolInvocations?: Record<string, number>;
   buildsPass?: number;
@@ -83,10 +85,14 @@ interface FullMetrics {
   cyclesCompleted?: number;
   compactions?: number;
   contextUsage?: number;
+  contextTokenLimit?: number;
+  contextCurrentTokens?: number;
   tasksCreated?: number;
   tasksResolved?: number;
   uxScores?: Record<string, number>;
   modelMaxContextTokens?: number;
+  totalPremiumRequests?: number;
+  totalCodeChanges?: { linesAdded: number; linesRemoved: number; filesModified: number };
 }
 
 // ─── Format helpers ──────────────────────────────────────────────────────────
@@ -751,11 +757,17 @@ export function TokenUsageDisplay({
   }, [metrics.agentInputTokens, metrics.agentOutputTokens]);
 
   // Scale bars against the model's actual context window from SDK metadata.
-  // Falls back to 200K if the model lookup hasn't resolved yet.
+  // Prefer SDK-native context window data (session.usage_info) when available.
+  // Falls back to model metadata, then to estimation.
+  const sdkTokenLimit = metrics.contextTokenLimit ?? 0;
+  const sdkCurrentTokens = metrics.contextCurrentTokens ?? 0;
   const modelMax = metrics.modelMaxContextTokens ?? 0;
   const agentMax = useMemo(() => {
+    // Tier 1: SDK session.usage_info provides exact token limit
+    if (sdkTokenLimit > 0) return sdkTokenLimit;
+    // Tier 2: Model metadata provides max context window
     if (modelMax > 0) return modelMax;
-    // Fallback: use relative scale with a reasonable floor
+    // Tier 3: Fallback estimation from observed usage
     const inp = metrics.agentInputTokens ?? {};
     const out = metrics.agentOutputTokens ?? {};
     let maxSingle = 0;
@@ -764,7 +776,7 @@ export function TokenUsageDisplay({
       if (t > maxSingle) maxSingle = t;
     }
     return Math.max(maxSingle * 1.5, 200_000);
-  }, [metrics.agentInputTokens, metrics.agentOutputTokens, modelMax]);
+  }, [metrics.agentInputTokens, metrics.agentOutputTokens, modelMax, sdkTokenLimit]);
 
   const totalToolCalls = useMemo(() => {
     if (!metrics.toolInvocations) return 0;

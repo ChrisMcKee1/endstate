@@ -137,9 +137,11 @@ function mcpServersForRole(
       return { fs: mcpFilesystem(projectPath), playwright: mcpPlaywright(projectPath) };
 
     case AGENT_ROLES.FIXER:
-    case AGENT_ROLES.CONSOLIDATOR:
     case AGENT_ROLES.CODE_SIMPLIFIER:
       return { fs: mcpFilesystem(projectPath), github: MCP_GITHUB };
+
+    case AGENT_ROLES.CONSOLIDATOR:
+      return { fs: mcpFilesystem(projectPath), github: MCP_GITHUB, playwright: mcpPlaywright(projectPath) };
 
     default:
       return { fs: mcpFilesystem(projectPath) };
@@ -238,6 +240,7 @@ export async function createAgentSession(
   }
 
   const sessionConfig: Parameters<typeof client.createSession>[0] = {
+    clientName: "endstate",
     model: config.model,
     streaming: true,
     systemMessage: { mode: "replace", content: systemPrompt },

@@ -3,861 +3,294 @@ name: copilot-sdk
 description: Build agentic applications with GitHub Copilot SDK. Use when embedding AI agents in apps, creating custom tools, implementing streaming responses, managing sessions, connecting to MCP servers, or creating custom agents. Triggers on Copilot SDK, GitHub SDK, agentic app, embed Copilot, programmable agent, MCP server, custom agent.
 ---
 
-# GitHub Copilot SDK
+# GitHub Copilot SDK — Endstate Reference
 
-Embed Copilot's agentic workflows in any application using Python, TypeScript, Go, or .NET.
+> `@github/copilot-sdk` v0.1.30 · TypeScript · Reverse-engineered from installed module declarations.
+>
+> This skill is Endstate-specific. It covers what the SDK provides, what Endstate uses, what it doesn't use yet, and where to get the most value from deeper integration.
 
-## Overview
+## Exports
 
-The GitHub Copilot SDK exposes the same engine behind Copilot CLI: a production-tested agent runtime you can invoke programmatically. No need to build your own orchestration - you define agent behavior, Copilot handles planning, tool invocation, file edits, and more.
-
-## Prerequisites
-
-1. **GitHub Copilot CLI** installed and authenticated ([Installation guide](https://docs.github.com/en/copilot/how-tos/set-up/install-copilot-cli))
-2. **Language runtime**: Node.js 18+, Python 3.8+, Go 1.21+, or .NET 8.0+
-
-Verify CLI: `copilot --version`
-
-## Installation
-
-### Node.js/TypeScript
-```bash
-mkdir copilot-demo && cd copilot-demo
-npm init -y --init-type module
-npm install @github/copilot-sdk tsx
+```ts
+import { CopilotClient } from "@github/copilot-sdk";     // Client singleton
+import { CopilotSession } from "@github/copilot-sdk";     // Session handle
+import { defineTool, approveAll } from "@github/copilot-sdk"; // Tool definition + permission helper
 ```
 
-### Python
-```bash
-pip install github-copilot-sdk
-```
-
-### Go
-```bash
-mkdir copilot-demo && cd copilot-demo
-go mod init copilot-demo
-go get github.com/github/copilot-sdk/go
-```
-
-### .NET
-```bash
-dotnet new console -n CopilotDemo && cd CopilotDemo
-dotnet add package GitHub.Copilot.SDK
-```
+---
 
 ## Quick Start
 
-### TypeScript
-```typescript
-import { CopilotClient } from "@github/copilot-sdk";
-
+```ts
+// 1. Create client singleton
 const client = new CopilotClient();
-const session = await client.createSession({ model: "gpt-4.1" });
+await client.start();
 
-const response = await session.sendAndWait({ prompt: "What is 2 + 2?" });
-console.log(response?.data.content);
-
-await client.stop();
-process.exit(0);
-```
-
-Run: `npx tsx index.ts`
-
-### Python
-```python
-import asyncio
-from copilot import CopilotClient
-
-async def main():
-    client = CopilotClient()
-    await client.start()
-
-    session = await client.create_session({"model": "gpt-4.1"})
-    response = await session.send_and_wait({"prompt": "What is 2 + 2?"})
-
-    print(response.data.content)
-    await client.stop()
-
-asyncio.run(main())
-```
-
-### Go
-```go
-package main
-
-import (
-    "fmt"
-    "log"
-    "os"
-    copilot "github.com/github/copilot-sdk/go"
-)
-
-func main() {
-    client := copilot.NewClient(nil)
-    if err := client.Start(); err != nil {
-        log.Fatal(err)
-    }
-    defer client.Stop()
-
-    session, err := client.CreateSession(&copilot.SessionConfig{Model: "gpt-4.1"})
-    if err != nil {
-        log.Fatal(err)
-    }
-
-    response, err := session.SendAndWait(copilot.MessageOptions{Prompt: "What is 2 + 2?"}, 0)
-    if err != nil {
-        log.Fatal(err)
-    }
-
-    fmt.Println(*response.Data.Content)
-    os.Exit(0)
-}
-```
-
-### .NET (C#)
-```csharp
-using GitHub.Copilot.SDK;
-
-await using var client = new CopilotClient();
-await using var session = await client.CreateSessionAsync(new SessionConfig { Model = "gpt-4.1" });
-
-var response = await session.SendAndWaitAsync(new MessageOptions { Prompt = "What is 2 + 2?" });
-Console.WriteLine(response?.Data.Content);
-```
-
-Run: `dotnet run`
-
-## Streaming Responses
-
-Enable real-time output for better UX:
-
-### TypeScript
-```typescript
-import { CopilotClient, SessionEvent } from "@github/copilot-sdk";
-
-const client = new CopilotClient();
+// 2. Create a session
 const session = await client.createSession({
-    model: "gpt-4.1",
-    streaming: true,
+  model: "claude-opus-4.6",
+  streaming: true,
+  systemMessage: { mode: "replace", content: "You are an expert agent..." },
+  tools: [myTool],
+  mcpServers: { fs: { type: "local", command: "npx", args: ["-y", "@modelcontextprotocol/server-filesystem", "."], tools: ["*"] } },
+  infiniteSessions: { enabled: true },
+  onPermissionRequest: approveAll,
+  hooks: myHooks,
 });
 
-session.on((event: SessionEvent) => {
-    if (event.type === "assistant.message_delta") {
-        process.stdout.write(event.data.deltaContent);
-    }
-    if (event.type === "session.idle") {
-        console.log(); // New line when done
-    }
-});
+// 3. Send a message and wait for response
+const response = await session.sendAndWait({ prompt: "Analyze this codebase" });
+console.log(response?.content);
 
-await session.sendAndWait({ prompt: "Tell me a short joke" });
-
-await client.stop();
-process.exit(0);
+// 4. Subscribe to events (for streaming)
+session.on("assistant.message_delta", (e) => process.stdout.write(e.content));
+session.on("session.idle", () => console.log("Turn complete"));
 ```
 
-### Python
-```python
-import asyncio
-import sys
-from copilot import CopilotClient
-from copilot.generated.session_events import SessionEventType
+---
 
-async def main():
-    client = CopilotClient()
-    await client.start()
+## Core Patterns (What Endstate Uses)
 
-    session = await client.create_session({
-        "model": "gpt-4.1",
-        "streaming": True,
-    })
+### Session Factory
+Each agent (Explorer, Analyst, Fixer, UX Reviewer, etc.) gets an isolated session with its own system prompt, tools, and MCP servers. See [assets/session-factory-pattern.ts](assets/session-factory-pattern.ts).
 
-    def handle_event(event):
-        if event.type == SessionEventType.ASSISTANT_MESSAGE_DELTA:
-            sys.stdout.write(event.data.delta_content)
-            sys.stdout.flush()
-        if event.type == SessionEventType.SESSION_IDLE:
-            print()
+Key decisions:
+- `systemMessage.mode: "replace"` — full control over system prompt (no built-in preamble)
+- `approveAll` permission handler — agents run autonomously
+- `infiniteSessions.enabled: true` — SDK handles context compaction transparently
+- `workingDirectory` scoped to target project
 
-    session.on(handle_event)
-    await session.send_and_wait({"prompt": "Tell me a short joke"})
-    await client.stop()
+### Session Hooks
+Hooks intercept lifecycle events for OTel instrumentation and developer steering injection:
+- `onPreToolUse` → Start OTel span, record tool invocation metric
+- `onPostToolUse` → End OTel span
+- `onUserPromptSubmitted` → Dequeue steering message, append `[DEVELOPER STEERING]: ...`
 
-asyncio.run(main())
-```
+See [assets/hook-patterns.ts](assets/hook-patterns.ts) and [references/session-config.md](references/session-config.md).
 
-### Go
-```go
-session, err := client.CreateSession(&copilot.SessionConfig{
-    Model:     "gpt-4.1",
-    Streaming: true,
-})
-
-session.On(func(event copilot.SessionEvent) {
-    if event.Type == "assistant.message_delta" {
-        fmt.Print(*event.Data.DeltaContent)
-    }
-    if event.Type == "session.idle" {
-        fmt.Println()
-    }
-})
-
-_, err = session.SendAndWait(copilot.MessageOptions{Prompt: "Tell me a short joke"}, 0)
-```
-
-### .NET
-```csharp
-await using var session = await client.CreateSessionAsync(new SessionConfig
-{
-    Model = "gpt-4.1",
-    Streaming = true,
-});
-
-session.On(ev =>
-{
-    if (ev is AssistantMessageDeltaEvent deltaEvent)
-        Console.Write(deltaEvent.Data.DeltaContent);
-    if (ev is SessionIdleEvent)
-        Console.WriteLine();
-});
-
-await session.SendAndWaitAsync(new MessageOptions { Prompt = "Tell me a short joke" });
-```
-
-## Custom Tools
-
-Define tools that Copilot can invoke during reasoning. When you define a tool, you tell Copilot:
-1. **What the tool does** (description)
-2. **What parameters it needs** (schema)
-3. **What code to run** (handler)
-
-### TypeScript (JSON Schema)
-```typescript
-import { CopilotClient, defineTool, SessionEvent } from "@github/copilot-sdk";
-
-const getWeather = defineTool("get_weather", {
-    description: "Get the current weather for a city",
-    parameters: {
-        type: "object",
-        properties: {
-            city: { type: "string", description: "The city name" },
-        },
-        required: ["city"],
-    },
-    handler: async (args: { city: string }) => {
-        const { city } = args;
-        // In a real app, call a weather API here
-        const conditions = ["sunny", "cloudy", "rainy", "partly cloudy"];
-        const temp = Math.floor(Math.random() * 30) + 50;
-        const condition = conditions[Math.floor(Math.random() * conditions.length)];
-        return { city, temperature: `${temp}°F`, condition };
-    },
-});
-
-const client = new CopilotClient();
-const session = await client.createSession({
-    model: "gpt-4.1",
-    streaming: true,
-    tools: [getWeather],
-});
-
-session.on((event: SessionEvent) => {
-    if (event.type === "assistant.message_delta") {
-        process.stdout.write(event.data.deltaContent);
-    }
-});
-
-await session.sendAndWait({
-    prompt: "What's the weather like in Seattle and Tokyo?",
-});
-
-await client.stop();
-process.exit(0);
-```
-
-### Python (Pydantic)
-```python
-import asyncio
-import random
-import sys
-from copilot import CopilotClient
-from copilot.tools import define_tool
-from copilot.generated.session_events import SessionEventType
-from pydantic import BaseModel, Field
-
-class GetWeatherParams(BaseModel):
-    city: str = Field(description="The name of the city to get weather for")
-
-@define_tool(description="Get the current weather for a city")
-async def get_weather(params: GetWeatherParams) -> dict:
-    city = params.city
-    conditions = ["sunny", "cloudy", "rainy", "partly cloudy"]
-    temp = random.randint(50, 80)
-    condition = random.choice(conditions)
-    return {"city": city, "temperature": f"{temp}°F", "condition": condition}
-
-async def main():
-    client = CopilotClient()
-    await client.start()
-
-    session = await client.create_session({
-        "model": "gpt-4.1",
-        "streaming": True,
-        "tools": [get_weather],
-    })
-
-    def handle_event(event):
-        if event.type == SessionEventType.ASSISTANT_MESSAGE_DELTA:
-            sys.stdout.write(event.data.delta_content)
-            sys.stdout.flush()
-
-    session.on(handle_event)
-
-    await session.send_and_wait({
-        "prompt": "What's the weather like in Seattle and Tokyo?"
-    })
-
-    await client.stop()
-
-asyncio.run(main())
-```
-
-### Go
-```go
-type WeatherParams struct {
-    City string `json:"city" jsonschema:"The city name"`
-}
-
-type WeatherResult struct {
-    City        string `json:"city"`
-    Temperature string `json:"temperature"`
-    Condition   string `json:"condition"`
-}
-
-getWeather := copilot.DefineTool(
-    "get_weather",
-    "Get the current weather for a city",
-    func(params WeatherParams, inv copilot.ToolInvocation) (WeatherResult, error) {
-        conditions := []string{"sunny", "cloudy", "rainy", "partly cloudy"}
-        temp := rand.Intn(30) + 50
-        condition := conditions[rand.Intn(len(conditions))]
-        return WeatherResult{
-            City:        params.City,
-            Temperature: fmt.Sprintf("%d°F", temp),
-            Condition:   condition,
-        }, nil
-    },
-)
-
-session, _ := client.CreateSession(&copilot.SessionConfig{
-    Model:     "gpt-4.1",
-    Streaming: true,
-    Tools:     []copilot.Tool{getWeather},
-})
-```
-
-### .NET (Microsoft.Extensions.AI)
-```csharp
-using GitHub.Copilot.SDK;
-using Microsoft.Extensions.AI;
-using System.ComponentModel;
-
-var getWeather = AIFunctionFactory.Create(
-    ([Description("The city name")] string city) =>
-    {
-        var conditions = new[] { "sunny", "cloudy", "rainy", "partly cloudy" };
-        var temp = Random.Shared.Next(50, 80);
-        var condition = conditions[Random.Shared.Next(conditions.Length)];
-        return new { city, temperature = $"{temp}°F", condition };
-    },
-    "get_weather",
-    "Get the current weather for a city"
-);
-
-await using var session = await client.CreateSessionAsync(new SessionConfig
-{
-    Model = "gpt-4.1",
-    Streaming = true,
-    Tools = [getWeather],
+### Custom Tools
+```ts
+const tool = defineTool("create_task", {
+  description: "Create a task object for a discovered issue",
+  parameters: z.object({ title: z.string(), severity: z.enum(["CRITICAL", "HIGH", "MEDIUM", "LOW"]) }),
+  handler: async ({ title, severity }) => {
+    const task = taskStore.create({ title, severity });
+    return { taskId: task.id, status: "created" };
+  },
 });
 ```
 
-## How Tools Work
-
-When Copilot decides to call your tool:
-1. Copilot sends a tool call request with the parameters
-2. The SDK runs your handler function
-3. The result is sent back to Copilot
-4. Copilot incorporates the result into its response
-
-Copilot decides when to call your tool based on the user's question and your tool's description.
-
-## Interactive CLI Assistant
-
-Build a complete interactive assistant:
-
-### TypeScript
-```typescript
-import { CopilotClient, defineTool, SessionEvent } from "@github/copilot-sdk";
-import * as readline from "readline";
-
-const getWeather = defineTool("get_weather", {
-    description: "Get the current weather for a city",
-    parameters: {
-        type: "object",
-        properties: {
-            city: { type: "string", description: "The city name" },
-        },
-        required: ["city"],
-    },
-    handler: async ({ city }) => {
-        const conditions = ["sunny", "cloudy", "rainy", "partly cloudy"];
-        const temp = Math.floor(Math.random() * 30) + 50;
-        const condition = conditions[Math.floor(Math.random() * conditions.length)];
-        return { city, temperature: `${temp}°F`, condition };
-    },
-});
-
-const client = new CopilotClient();
-const session = await client.createSession({
-    model: "gpt-4.1",
-    streaming: true,
-    tools: [getWeather],
-});
-
-session.on((event: SessionEvent) => {
-    if (event.type === "assistant.message_delta") {
-        process.stdout.write(event.data.deltaContent);
-    }
-});
-
-const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout,
-});
-
-console.log("Weather Assistant (type 'exit' to quit)");
-console.log("Try: 'What's the weather in Paris?'\n");
-
-const prompt = () => {
-    rl.question("You: ", async (input) => {
-        if (input.toLowerCase() === "exit") {
-            await client.stop();
-            rl.close();
-            return;
-        }
-
-        process.stdout.write("Assistant: ");
-        await session.sendAndWait({ prompt: input });
-        console.log("\n");
-        prompt();
-    });
-};
-
-prompt();
-```
-
-### Python
-```python
-import asyncio
-import random
-import sys
-from copilot import CopilotClient
-from copilot.tools import define_tool
-from copilot.generated.session_events import SessionEventType
-from pydantic import BaseModel, Field
-
-class GetWeatherParams(BaseModel):
-    city: str = Field(description="The name of the city to get weather for")
-
-@define_tool(description="Get the current weather for a city")
-async def get_weather(params: GetWeatherParams) -> dict:
-    conditions = ["sunny", "cloudy", "rainy", "partly cloudy"]
-    temp = random.randint(50, 80)
-    condition = random.choice(conditions)
-    return {"city": params.city, "temperature": f"{temp}°F", "condition": condition}
-
-async def main():
-    client = CopilotClient()
-    await client.start()
-
-    session = await client.create_session({
-        "model": "gpt-4.1",
-        "streaming": True,
-        "tools": [get_weather],
-    })
-
-    def handle_event(event):
-        if event.type == SessionEventType.ASSISTANT_MESSAGE_DELTA:
-            sys.stdout.write(event.data.delta_content)
-            sys.stdout.flush()
-
-    session.on(handle_event)
-
-    print("Weather Assistant (type 'exit' to quit)")
-    print("Try: 'What's the weather in Paris?'\n")
-
-    while True:
-        try:
-            user_input = input("You: ")
-        except EOFError:
-            break
-
-        if user_input.lower() == "exit":
-            break
-
-        sys.stdout.write("Assistant: ")
-        await session.send_and_wait({"prompt": user_input})
-        print("\n")
-
-    await client.stop()
-
-asyncio.run(main())
-```
-
-## MCP Server Integration
-
-Connect to MCP (Model Context Protocol) servers for pre-built tools. Connect to GitHub's MCP server for repository, issue, and PR access:
-
-### TypeScript
-```typescript
-const session = await client.createSession({
-    model: "gpt-4.1",
-    mcpServers: {
-        github: {
-            type: "http",
-            url: "https://api.githubcopilot.com/mcp/",
-        },
-    },
-});
-```
-
-### Python
-```python
-session = await client.create_session({
-    "model": "gpt-4.1",
-    "mcp_servers": {
-        "github": {
-            "type": "http",
-            "url": "https://api.githubcopilot.com/mcp/",
-        },
-    },
-})
-```
-
-### Go
-```go
-session, _ := client.CreateSession(&copilot.SessionConfig{
-    Model: "gpt-4.1",
-    MCPServers: map[string]copilot.MCPServerConfig{
-        "github": {
-            Type: "http",
-            URL:  "https://api.githubcopilot.com/mcp/",
-        },
-    },
-})
-```
-
-### .NET
-```csharp
-await using var session = await client.CreateSessionAsync(new SessionConfig
-{
-    Model = "gpt-4.1",
-    McpServers = new Dictionary<string, McpServerConfig>
-    {
-        ["github"] = new McpServerConfig
-        {
-            Type = "http",
-            Url = "https://api.githubcopilot.com/mcp/",
-        },
-    },
-});
-```
-
-## Custom Agents
-
-Define specialized AI personas for specific tasks:
-
-### TypeScript
-```typescript
-const session = await client.createSession({
-    model: "gpt-4.1",
-    customAgents: [{
-        name: "pr-reviewer",
-        displayName: "PR Reviewer",
-        description: "Reviews pull requests for best practices",
-        prompt: "You are an expert code reviewer. Focus on security, performance, and maintainability.",
-    }],
-});
-```
-
-### Python
-```python
-session = await client.create_session({
-    "model": "gpt-4.1",
-    "custom_agents": [{
-        "name": "pr-reviewer",
-        "display_name": "PR Reviewer",
-        "description": "Reviews pull requests for best practices",
-        "prompt": "You are an expert code reviewer. Focus on security, performance, and maintainability.",
-    }],
-})
-```
-
-## System Message
-
-Customize the AI's behavior and personality:
-
-### TypeScript
-```typescript
-const session = await client.createSession({
-    model: "gpt-4.1",
-    systemMessage: {
-        content: "You are a helpful assistant for our engineering team. Always be concise.",
-    },
-});
-```
-
-### Python
-```python
-session = await client.create_session({
-    "model": "gpt-4.1",
-    "system_message": {
-        "content": "You are a helpful assistant for our engineering team. Always be concise.",
-    },
-})
-```
-
-## External CLI Server
-
-Run the CLI in server mode separately and connect the SDK to it. Useful for debugging, resource sharing, or custom environments.
-
-### Start CLI in Server Mode
-```bash
-copilot --server --port 4321
-```
-
-### Connect SDK to External Server
-
-#### TypeScript
-```typescript
-const client = new CopilotClient({
-    cliUrl: "localhost:4321"
-});
-
-const session = await client.createSession({ model: "gpt-4.1" });
-```
-
-#### Python
-```python
-client = CopilotClient({
-    "cli_url": "localhost:4321"
-})
-await client.start()
-
-session = await client.create_session({"model": "gpt-4.1"})
-```
-
-#### Go
-```go
-client := copilot.NewClient(&copilot.ClientOptions{
-    CLIUrl: "localhost:4321",
-})
-
-if err := client.Start(); err != nil {
-    log.Fatal(err)
-}
-
-session, _ := client.CreateSession(&copilot.SessionConfig{Model: "gpt-4.1"})
-```
-
-#### .NET
-```csharp
-using var client = new CopilotClient(new CopilotClientOptions
-{
-    CliUrl = "localhost:4321"
-});
-
-await using var session = await client.CreateSessionAsync(new SessionConfig { Model = "gpt-4.1" });
-```
-
-**Note:** When `cliUrl` is provided, the SDK will not spawn or manage a CLI process - it only connects to the existing server.
-
-## Event Types
-
-| Event | Description |
-|-------|-------------|
-| `user.message` | User input added |
-| `assistant.message` | Complete model response |
-| `assistant.message_delta` | Streaming response chunk |
-| `assistant.reasoning` | Model reasoning (model-dependent) |
-| `assistant.reasoning_delta` | Streaming reasoning chunk |
-| `tool.execution_start` | Tool invocation started |
-| `tool.execution_complete` | Tool execution finished |
-| `session.idle` | No active processing |
-| `session.error` | Error occurred |
-
-## Client Configuration
-
-| Option | Description | Default |
-|--------|-------------|---------|
-| `cliPath` | Path to Copilot CLI executable | System PATH |
-| `cliUrl` | Connect to existing server (e.g., "localhost:4321") | None |
-| `port` | Server communication port | Random |
-| `useStdio` | Use stdio transport instead of TCP | true |
-| `logLevel` | Logging verbosity | "info" |
-| `autoStart` | Launch server automatically | true |
-| `autoRestart` | Restart on crashes | true |
-| `cwd` | Working directory for CLI process | Inherited |
-
-## Session Configuration
-
-| Option | Description |
-|--------|-------------|
-| `model` | LLM to use ("gpt-4.1", "claude-sonnet-4.5", etc.) |
-| `sessionId` | Custom session identifier |
-| `tools` | Custom tool definitions |
-| `mcpServers` | MCP server connections |
-| `customAgents` | Custom agent personas |
-| `systemMessage` | Override default system prompt |
-| `streaming` | Enable incremental response chunks |
-| `availableTools` | Whitelist of permitted tools |
-| `excludedTools` | Blacklist of disabled tools |
-
-## Session Persistence
-
-Save and resume conversations across restarts:
-
-### Create with Custom ID
-```typescript
-const session = await client.createSession({
-    sessionId: "user-123-conversation",
-    model: "gpt-4.1"
-});
-```
-
-### Resume Session
-```typescript
-const session = await client.resumeSession("user-123-conversation");
-await session.send({ prompt: "What did we discuss earlier?" });
-```
-
-### List and Delete Sessions
-```typescript
-const sessions = await client.listSessions();
-await client.deleteSession("old-session-id");
-```
-
-## Error Handling
-
-```typescript
-try {
-    const client = new CopilotClient();
-    const session = await client.createSession({ model: "gpt-4.1" });
-    const response = await session.sendAndWait(
-        { prompt: "Hello!" },
-        30000 // timeout in ms
-    );
-} catch (error) {
-    if (error.code === "ENOENT") {
-        console.error("Copilot CLI not installed");
-    } else if (error.code === "ECONNREFUSED") {
-        console.error("Cannot connect to Copilot server");
-    } else {
-        console.error("Error:", error.message);
-    }
-} finally {
-    await client.stop();
-}
-```
-
-## Graceful Shutdown
-
-```typescript
-process.on("SIGINT", async () => {
-    console.log("Shutting down...");
-    await client.stop();
-    process.exit(0);
-});
-```
-
-## Common Patterns
-
-### Multi-turn Conversation
-```typescript
-const session = await client.createSession({ model: "gpt-4.1" });
-
-await session.sendAndWait({ prompt: "My name is Alice" });
-await session.sendAndWait({ prompt: "What's my name?" });
-// Response: "Your name is Alice"
-```
-
-### File Attachments
-```typescript
-await session.send({
-    prompt: "Analyze this file",
-    attachments: [{
-        type: "file",
-        path: "./data.csv",
-        displayName: "Sales Data"
-    }]
-});
-```
-
-### Abort Long Operations
-```typescript
-const timeoutId = setTimeout(() => {
-    session.abort();
-}, 60000);
-
-session.on((event) => {
-    if (event.type === "session.idle") {
-        clearTimeout(timeoutId);
-    }
-});
-```
-
-## Available Models
-
-Query available models at runtime:
-
-```typescript
-const models = await client.getModels();
-// Returns: ["gpt-4.1", "gpt-4o", "claude-sonnet-4.5", ...]
-```
-
-## Best Practices
-
-1. **Always cleanup**: Use `try-finally` or `defer` to ensure `client.stop()` is called
-2. **Set timeouts**: Use `sendAndWait` with timeout for long operations
-3. **Handle events**: Subscribe to error events for robust error handling
-4. **Use streaming**: Enable streaming for better UX on long responses
-5. **Persist sessions**: Use custom session IDs for multi-turn conversations
-6. **Define clear tools**: Write descriptive tool names and descriptions
-
-## Architecture
-
-```
-Your Application
-       |
-  SDK Client
-       | JSON-RPC
-  Copilot CLI (server mode)
-       |
-  GitHub (models, auth)
-```
-
-The SDK manages the CLI process lifecycle automatically. All communication happens via JSON-RPC over stdio or TCP.
-
-## Resources
-
-- **GitHub Repository**: https://github.com/github/copilot-sdk
-- **Getting Started Tutorial**: https://github.com/github/copilot-sdk/blob/main/docs/tutorials/first-app.md
-- **GitHub MCP Server**: https://github.com/github/github-mcp-server
-- **MCP Servers Directory**: https://github.com/modelcontextprotocol/servers
-- **Cookbook**: https://github.com/github/copilot-sdk/tree/main/cookbook
-- **Samples**: https://github.com/github/copilot-sdk/tree/main/samples
-
-## Status
-
-This SDK is in **Technical Preview** and may have breaking changes. Not recommended for production use yet.
+### MCP Servers
+Per-role assignment:
+| Role | Servers |
+|------|---------|
+| Explorer, UX Reviewer | filesystem + playwright |
+| Fixer, Consolidator, Code Simplifier | filesystem + github |
+| Analyst, Researcher | filesystem |
+
+### SSE Event Forwarding
+All 40+ session events are forwarded via SSE to the dashboard. See [assets/event-forwarding-pattern.ts](assets/event-forwarding-pattern.ts).
+
+---
+
+## Event System
+
+The SDK emits 40+ event types across these categories:
+
+| Category | Key Events | UI Impact |
+|----------|-----------|-----------|
+| **Session lifecycle** | `session.start`, `session.idle`, `session.error`, `session.shutdown` | Status indicators, error display |
+| **Assistant** | `message_delta`, `message`, `reasoning_delta`, `turn_start/end`, `usage` | Agent stream, token tracking |
+| **Tools** | `execution_start`, `execution_complete`, `execution_progress` | Tool activity indicators |
+| **Context** | `usage_info`, `compaction_start/complete`, `truncation` | ContextMeter, compaction animation |
+| **Subagents** | `subagent.started/completed/failed` | Custom agent lifecycle |
+
+**Full reference:** [references/session-events.md](references/session-events.md)
+
+---
+
+## Unused SDK Capabilities
+
+These features exist in the SDK but Endstate doesn't use them yet. Ordered by implementation value:
+
+### HIGH VALUE
+
+1. **`assistant.usage` event** — Per-call token counts: `inputTokens`, `outputTokens`, `cacheReadTokens`, `cacheWriteTokens`, `cost`, `duration`. Replaces manual token estimation. Feed directly to MetricsBar + OTel counters. See [assets/token-tracking.ts](assets/token-tracking.ts).
+
+2. **`session.usage_info` event** — Live context window: `tokenLimit`, `currentTokens`, `messagesLength`. Native data source for ContextMeter component — no estimation needed. See [assets/token-tracking.ts](assets/token-tracking.ts).
+
+### MEDIUM VALUE
+
+3. **`session.shutdown` event** — End-of-session summary with `totalPremiumRequests`, `totalApiDurationMs`, `codeChanges` (linesAdded/Removed, filesModified), and per-model `modelMetrics`. Free reporting data.
+
+4. **`session.rpc.compaction.compact()`** — Manual compaction trigger. Useful before sending large prompts (task summaries, full codebase analysis). See [assets/manual-compaction.ts](assets/manual-compaction.ts).
+
+5. **`client.rpc.account.getQuota()`** — Account-level quota info (entitlement, used, remaining%, resetDate). Display in header/metrics. See [assets/quota-check.ts](assets/quota-check.ts).
+
+6. **`client.rpc.tools.list()`** — List all built-in tools with JSON schemas and instructions. Could power the ToolManager panel with real data instead of hardcoded lists.
+
+### LOWER VALUE
+
+7. **`session.setModel(model)`** — Hot-swap model mid-session without destroying/recreating the session.
+
+8. **`session.rpc.mode.set("autopilot")`** — Switch agents between `"interactive"`, `"plan"`, and `"autopilot"` modes.
+
+9. **`session.rpc.plan.*`** — Read/write/delete plans in session workspace. Could expose agent plans in the dashboard.
+
+10. **`onUserInputRequest` handler** — Enables the built-in `ask_user` tool for interactive agent-developer Q&A.
+
+11. **`tool.execution_progress`** — Streaming progress from long-running tools.
+
+12. **`assistant.intent`** — Model's classified intent before responding.
+
+13. **`subagent.*` events** — Custom agent lifecycle tracking (started/completed/failed).
+
+14. **`session.truncation`** — Non-compaction overflow handling metrics.
+
+15. **`clientName` option** — Identifies the SDK consumer in User-Agent headers.
+
+---
+
+## Reference Documentation
+
+| Document | Contents |
+|----------|----------|
+| [references/api-surface.md](references/api-surface.md) | Full `CopilotClient` + `CopilotSession` API reference |
+| [references/session-events.md](references/session-events.md) | All 40+ event types with TypeScript payloads |
+| [references/session-config.md](references/session-config.md) | `SessionConfig`, hooks, permissions, MCP server config |
+| [references/types-reference.md](references/types-reference.md) | All exported types (`ModelInfo`, `ToolDefinition`, `SessionEvent`, etc.) |
+
+## Code Examples
+
+| Asset | Pattern |
+|-------|---------|
+| [assets/session-factory-pattern.ts](assets/session-factory-pattern.ts) | How Endstate creates isolated agent sessions |
+| [assets/hook-patterns.ts](assets/hook-patterns.ts) | OTel instrumentation, steering injection, error handling |
+| [assets/event-forwarding-pattern.ts](assets/event-forwarding-pattern.ts) | SSE event forwarding from SDK to dashboard |
+| [assets/token-tracking.ts](assets/token-tracking.ts) | Native token tracking via `assistant.usage` event |
+| [assets/manual-compaction.ts](assets/manual-compaction.ts) | Proactive compaction via `session.rpc.compaction` |
+| [assets/quota-check.ts](assets/quota-check.ts) | Account quota checking via `client.rpc.account` |
+
+---
+
+## Audit: Implementation Priorities
+
+Based on reverse-engineering the SDK and auditing the Endstate codebase, these are the specific integration gaps and highest-value fixes:
+
+### Current State — What Works
+
+| Feature | Status |
+|---------|--------|
+| `assistant.message_delta` subscription | Working — streams to AgentStream + extracts cheat sheet |
+| `assistant.usage` event tracking | Working — feeds `recordAgentTokens()` in MetricsBar |
+| `session.idle` handling | Working — triggers cleanup after each turn |
+| `approveAll` permission handler | Working — agents run autonomously |
+| `infiniteSessions.enabled` | Working — SDK handles compaction |
+| `listModels()` for model metadata | Working — ContextMeter uses `max_context_window_tokens` |
+| OTel token counters defined | Working — `agentTokensInput/Output` counters exist and fire |
+
+### Current State — Previously Dead Code (now connected)
+
+| Function | File | Status |
+|----------|------|--------|
+| `recordCompaction()` | `otel/metrics.ts` | **CONNECTED** — wired to `session.compaction_start` in orchestrator |
+| `recordContextUsage()` | `otel/metrics.ts` | **CONNECTED** — fed by `recordContextWindow()` from `session.usage_info` events |
+| `recordToolInvocation()` | `otel/metrics.ts` | **CONNECTED** — wired to `tool.execution_start` in orchestrator |
+| `CompactionIndicator` | `TokenUsageDisplay.tsx` | **CONNECTED** — metrics now flow through `recordCompaction()` |
+
+### Current State — Missing Event Subscriptions
+
+| Event | Impact |
+|-------|--------|
+| `session.compaction_start/complete` | Compaction invisible to UI and OTel |
+| `assistant.reasoning_delta/reasoning` | Extended thinking tokens not tracked or displayed |
+| `session.shutdown` | No end-of-session summary (premiumRequests, codeChanges) |
+| `session.usage_info` | No native context window tracking |
+| `tool.execution_progress` | No streaming tool output |
+
+### Tier 1 — COMPLETED
+
+- [x] **Subscribe to `session.compaction_start`** in orchestrator event handler → calls `recordCompaction()`
+- [x] **Subscribe to `session.usage_info`** → calls `recordContextWindow()` for native context tracking
+- [x] **Subscribe to `tool.execution_start`** → calls `recordToolInvocation()` for OTel
+- [x] **Subscribe to `session.shutdown`** → calls `recordSessionShutdown()` for end-of-session metrics
+- [x] **Set `clientName: "endstate"`** in SessionConfig (session-level, not client-level)
+- [x] **Cache read/write token tracking** — `recordAgentTokens()` now accepts cacheRead/cacheWrite from `assistant.usage`
+- [x] **TokenUsageDisplay** — `ContextGauge` now prefers SDK-native `contextTokenLimit` over hardcoded 200K
+- [x] **Dashboard** — Handles `session.usage_info` and `session.shutdown` SSE events
+- [x] **New `/api/quota` route** — exposes `client.rpc.account.getQuota()` + `getAuthStatus()`
+- [x] **New `/api/tools` route** — exposes `client.rpc.tools.list()` for built-in tool enumeration
+- [x] **New client utilities** — `getAuthStatus()`, `listBuiltInTools()`, `getAccountQuota()`, `listSessions()`, `resumeSession()`
+- [x] **Extended MetricsSnapshot** — added `contextTokenLimit`, `contextCurrentTokens`, `agentCacheReadTokens`, `agentCacheWriteTokens`, `totalPremiumRequests`, `totalCodeChanges`
+- [x] **Extended SESSION_EVENT_TYPES** — added `assistant.usage`, `assistant.turn_start/end`, `assistant.intent`, `session.start`, `session.shutdown`, `session.usage_info`, `session.model_change`, `session.truncation`, `tool.execution_progress`, `subagent.*`
+
+### Tier 2 — Remaining (for future implementation)
+
+- [ ] **Session persistence / resume** via `client.listSessions()` + `client.resumeSession()`
+  - Save session IDs to `.projects/<slug>/sessions.json`
+  - On pipeline resume, attempt `resumeSession()` instead of `createSession()`
+  - Reduces token waste, preserves conversation context across restarts
+
+- [ ] **Manual compaction** via `session.rpc.compaction.compact()`
+  - Call before large task summary prompts in orchestrator
+  - Trigger when `usage_info.currentTokens / tokenLimit > 0.80`
+
+- [ ] **ToolManager integration** — Use `/api/tools` route data in ToolManager component
+
+- [ ] **Quota display** — Use `/api/quota` route data in dashboard header
+
+### Tier 3 — Consider Later (experimental/future)
+- [ ] Permission audit trail (replace `approveAll` with logging wrapper)
+- [ ] `session.rpc.plan.read()` → expose agent plans in dashboard
+- [ ] `onUserInputRequest` → interactive agent-developer Q&A
+- [ ] `tool.execution_progress` → streaming tool output in AgentStream
+- [ ] `assistant.intent` → intent classification display
+- [ ] `subagent.*` events → custom agent lifecycle in WorkflowGraph
+- [ ] `session.setModel()` → mid-session model hot-swap
+
+---
+
+## Reference Documentation
+
+| Document | Contents |
+|----------|----------|
+| [references/api-surface.md](references/api-surface.md) | Full `CopilotClient` + `CopilotSession` API reference |
+| [references/session-events.md](references/session-events.md) | All 40+ event types with TypeScript payloads |
+| [references/session-config.md](references/session-config.md) | `SessionConfig`, hooks, permissions, MCP server config |
+| [references/types-reference.md](references/types-reference.md) | All exported types (`ModelInfo`, `ToolDefinition`, `SessionEvent`, etc.) |
+
+## Code Examples
+
+| Asset | Pattern |
+|-------|---------|
+| [assets/session-factory-pattern.ts](assets/session-factory-pattern.ts) | How Endstate creates isolated agent sessions |
+| [assets/hook-patterns.ts](assets/hook-patterns.ts) | OTel instrumentation, steering injection, error handling |
+| [assets/event-forwarding-pattern.ts](assets/event-forwarding-pattern.ts) | SSE event forwarding from SDK to dashboard |
+| [assets/token-tracking.ts](assets/token-tracking.ts) | Native token tracking via `assistant.usage` event |
+| [assets/manual-compaction.ts](assets/manual-compaction.ts) | Proactive compaction via `session.rpc.compaction` |
+| [assets/quota-check.ts](assets/quota-check.ts) | Account quota checking via `client.rpc.account` |
+
+---
+
+## Audit: Implementation Priorities
+
+Based on reverse-engineering the SDK and comparing against Endstate's current usage, these are the highest-value integrations:
+
+### Tier 1 — Implement First (direct value, straightforward)
+- [ ] Subscribe to `assistant.usage` event in agent sessions → feed real token counts to MetricsBar + OTel (`agent.tokens.input/output` counters)
+- [ ] Subscribe to `session.usage_info` event → feed `tokenLimit`/`currentTokens` to ContextMeter (replace estimation logic)
+- [ ] Set `clientName: "endstate"` in CopilotClient options (trivial, better telemetry)
+
+### Tier 2 — Implement Next (meaningful improvements)
+- [ ] Subscribe to `session.shutdown` event → capture `codeChanges` and `modelMetrics` for end-of-cycle reporting
+- [ ] Add `session.rpc.compaction.compact()` call before large task summary prompts in orchestrator
+- [ ] Add `/api/quota` route that calls `client.rpc.account.getQuota()` → display in header
+- [ ] Use `client.rpc.tools.list()` to populate ToolManager with real built-in tool data
+
+### Tier 3 — Consider Later (experimental/future)
+- [ ] Expose `session.rpc.plan.read()` in dashboard for agent plan visibility
+- [ ] Implement `onUserInputRequest` for interactive steering (agent asks developer questions)
+- [ ] Forward `tool.execution_progress` events for streaming tool output in AgentStream
+- [ ] Forward `assistant.intent` for intent classification display
+- [ ] Track `subagent.*` events for custom agent lifecycle in WorkflowGraph
+

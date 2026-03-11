@@ -45,3 +45,33 @@ export async function listModels() {
   const client = await getClient();
   return client.listModels();
 }
+
+/** Auth status from the Copilot CLI. */
+export async function getAuthStatus() {
+  const client = await getClient();
+  return client.getAuthStatus();
+}
+
+/** List all built-in tools available (optionally filtered by model). Returns SDK-native ToolsListResult. */
+export async function listBuiltInTools(model?: string) {
+  const client = await getClient();
+  return client.rpc.tools.list({ model });
+}
+
+/** Account quota information (returns SDK-native AccountGetQuotaResult). */
+export async function getAccountQuota() {
+  const client = await getClient();
+  return client.rpc.account.getQuota();
+}
+
+/** List all existing sessions (for resume logic). */
+export async function listSessions(filter?: Parameters<SdkClient["listSessions"]>[0]) {
+  const client = await getClient();
+  return client.listSessions(filter);
+}
+
+/** Resume an existing session by ID. */
+export async function resumeSession(sessionId: string, config: Parameters<SdkClient["resumeSession"]>[1]) {
+  const client = await getClient();
+  return client.resumeSession(sessionId, config);
+}

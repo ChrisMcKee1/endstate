@@ -15,6 +15,10 @@ import {
   recordAgentTurn,
   recordAgentLatency,
   recordAgentTokens,
+  recordCompaction,
+  recordContextWindow,
+  recordSessionShutdown,
+  recordToolInvocation,
   setModelMaxContextTokens,
 } from "@/lib/otel/metrics";
 import {
@@ -250,13 +254,39 @@ async function runAgent(
       if (event.type === "assistant.usage" && event.data) {
         const cumulativeInput = (event.data.inputTokens as number) ?? 0;
         const cumulativeOutput = (event.data.outputTokens as number) ?? 0;
+        const cacheRead = (event.data.cacheReadTokens as number) ?? 0;
+        const cacheWrite = (event.data.cacheWriteTokens as number) ?? 0;
         const deltaInput = Math.max(0, cumulativeInput - lastInputTokens);
         const deltaOutput = Math.max(0, cumulativeOutput - lastOutputTokens);
         lastInputTokens = cumulativeInput;
         lastOutputTokens = cumulativeOutput;
         if (deltaInput > 0 || deltaOutput > 0) {
-          recordAgentTokens(role, deltaInput, deltaOutput);
+          recordAgentTokens(role, deltaInput, deltaOutput, cacheRead, cacheWrite);
         }
+      }
+      // Context window state — feeds ContextMeter natively from SDK
+      if (event.type === "session.usage_info" && event.data) {
+        const tokenLimit = (event.data.tokenLimit as number) ?? 0;
+        const currentTokens = (event.data.currentTokens as number) ?? 0;
+        if (tokenLimit > 0) {
+          recordContextWindow(tokenLimit, currentTokens);
+        }
+      }
+      // Compaction events — connect to existing OTel counters
+      if (event.type === "session.compaction_start") {
+        recordCompaction();
+      }
+      // Session shutdown — capture end-of-session metrics
+      if (event.type === "session.shutdown" && event.data) {
+        recordSessionShutdown({
+          premiumRequests: event.data.totalPremiumRequests as number | undefined,
+          codeChanges: event.data.codeChanges as { linesAdded: number; linesRemoved: number; filesModified: number } | undefined,
+        });
+      }
+      // Tool invocations — connect to existing OTel counter
+      if (event.type === "tool.execution_start" && event.data) {
+        const toolName = (event.data.toolName as string) ?? "unknown";
+        recordToolInvocation(toolName);
       }
       // Accumulate streaming text for cheat sheet extraction
       if (event.type === "assistant.message_delta" && event.data) {

@@ -324,6 +324,28 @@ export function Dashboard({ config }: DashboardProps) {
           });
           break;
         }
+        case SESSION_EVENT_TYPES.SESSION_USAGE_INFO: {
+          const tokenLimit = evt.data.tokenLimit as number | undefined;
+          const currentTokens = evt.data.currentTokens as number | undefined;
+          if (tokenLimit && tokenLimit > 0 && currentTokens !== undefined) {
+            setContextUsage(currentTokens / tokenLimit);
+          }
+          break;
+        }
+        case SESSION_EVENT_TYPES.SESSION_SHUTDOWN: {
+          // Session shutdown carries end-of-session metrics — logged for visibility
+          const premiumReqs = evt.data.totalPremiumRequests as number | undefined;
+          if (premiumReqs) {
+            batch.push({
+              id: `se-${entryCounter.current++}`,
+              agent: (evt.agent ?? null) as AgentRole | null,
+              type: "system",
+              content: `Session complete: ${premiumReqs} premium requests`,
+              timestamp: evt.timestamp,
+            });
+          }
+          break;
+        }
         case SESSION_EVENT_TYPES.PIPELINE_CYCLE_START: {
           setCompletedAgents([]);
           batch.push({

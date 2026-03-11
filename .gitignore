@@ -63,3 +63,4 @@ test-app/
 # .agentic-dev.json  (tracked per-project, but not in this repo)
 .playwright-cli/*
 
+cycle2-dark-mode.png
