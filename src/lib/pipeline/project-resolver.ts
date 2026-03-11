@@ -34,10 +34,18 @@ export function projectTasksDir(projectPath: string): string {
   return path.join(projectDir(projectPath), "tasks");
 }
 
+export function projectScreenshotsDir(projectPath: string): string {
+  return path.join(projectDir(projectPath), "screenshots");
+}
+
 export function ensureProjectDir(projectPath: string): void {
   const tasksDir = projectTasksDir(projectPath);
   if (!fs.existsSync(tasksDir)) {
     fs.mkdirSync(tasksDir, { recursive: true });
+  }
+  const screenshotsDir = projectScreenshotsDir(projectPath);
+  if (!fs.existsSync(screenshotsDir)) {
+    fs.mkdirSync(screenshotsDir, { recursive: true });
   }
 }
 

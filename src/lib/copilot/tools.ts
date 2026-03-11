@@ -35,6 +35,7 @@ const agentEnum = z.enum([
 const statusEnum = z.enum([
   TASK_STATUSES.OPEN,
   TASK_STATUSES.IN_PROGRESS,
+  TASK_STATUSES.BLOCKED,
   TASK_STATUSES.RESOLVED,
   TASK_STATUSES.DEFERRED,
   TASK_STATUSES.WONT_FIX,
@@ -84,6 +85,7 @@ export const updateTaskTool = defineTool("update_task", {
   parameters: z.object({
     taskId: z.string().describe("Task ID (e.g. TSK-001)"),
     status: statusEnum.optional().describe("New task status"),
+    statusReason: z.string().optional().describe("Why this status was set — required when setting blocked, deferred, or wont-fix. Document the blocker, rationale, or skip reason."),
     agent: agentEnum.describe("The agent performing this update"),
     action: actionEnum.describe("What action is being recorded"),
     cycle: z.number().describe("Current pipeline cycle number"),

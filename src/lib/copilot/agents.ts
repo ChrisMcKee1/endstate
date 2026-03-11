@@ -6,6 +6,7 @@ import { dequeue, isEmpty } from "@/lib/pipeline/steering";
 import { getSkillDirectoriesForAgent } from "@/lib/pipeline/skill-manager";
 import { getMcpServersForAgent } from "@/lib/pipeline/mcp-manager";
 import { getCheatSheet } from "@/lib/pipeline/cheat-sheet-store";
+import { projectScreenshotsDir } from "@/lib/pipeline/project-resolver";
 import { startToolSpan, endSpanOk } from "@/lib/otel/spans";
 import { recordToolInvocation } from "@/lib/otel/metrics";
 import type { AgentRole, PipelineConfig } from "@/lib/types";
@@ -85,12 +86,17 @@ function loadSystemPrompt(role: AgentRole, config: PipelineConfig): string {
 
 // ─── MCP server configs per role ──────────────────────────────────────────────
 
-const MCP_PLAYWRIGHT = {
-  type: "local" as const,
-  command: "npx",
-  args: ["@playwright/mcp@latest"],
-  tools: ["*"],
-};
+function mcpPlaywright(projectPath: string) {
+  // Route screenshots to .projects/<slug>/screenshots/ so artifacts
+  // land in the correct project folder instead of the Endstate cwd.
+  const screenshotsDir = projectScreenshotsDir(projectPath);
+  return {
+    type: "local" as const,
+    command: "npx",
+    args: ["@playwright/mcp@latest", "--output-dir", screenshotsDir],
+    tools: ["*"],
+  };
+}
 
 function mcpFilesystem(projectPath: string) {
   return {
@@ -128,7 +134,7 @@ function mcpServersForRole(
 
     case AGENT_ROLES.EXPLORER:
     case AGENT_ROLES.UX_REVIEWER:
-      return { fs: mcpFilesystem(projectPath), playwright: MCP_PLAYWRIGHT };
+      return { fs: mcpFilesystem(projectPath), playwright: mcpPlaywright(projectPath) };
 
     case AGENT_ROLES.FIXER:
     case AGENT_ROLES.CONSOLIDATOR:

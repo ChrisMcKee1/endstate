@@ -15,6 +15,16 @@ const DOMAIN_LABELS: Record<string, string> = {
   [DOMAINS.DOCS]: "Docs",
 };
 
+// Domain colors are centralized in globals.css as --color-domain-* vars.
+// These hex values must match for SVG rendering (SVG can't resolve CSS vars).
+// Source of truth: globals.css → --color-domain-*
+const DOMAIN_COLORS: Record<string, string> = {
+  [DOMAINS.UI]: "#00E5FF",
+  [DOMAINS.BACKEND]: "#B026FF",
+  [DOMAINS.DATABASE]: "#FFD700",
+  [DOMAINS.DOCS]: "#FF69B4",
+};
+
 const NODE_RADIUS = 20;
 const LAYER_GAP = 72;
 const DOMAIN_SPREAD = 110;
@@ -29,6 +39,11 @@ const BREATHE_TRANSITION = {
 };
 
 const SPRING = { type: "spring" as const, stiffness: 200, damping: 20 };
+
+// Cycle arc colors — clockwise flow
+const LOOP_COLOR_RIGHT = "#A855F7"; // violet — Explorer → UX (down the right)
+const LOOP_COLOR_LEFT = "#6366F1";  // indigo — UX → Explorer (up the left)
+const LOOP_MARGIN = 140; // Must be large — cubic bezier peaks at ~75% of control point distance from center
 
 // ─── Layout computation ──────────────────────────────────────────────────────
 
@@ -199,9 +214,36 @@ export function WorkflowGraph({
     [onAgentClick],
   );
 
-  // Find exit and explorer nodes for loop-back arc
+  // Find exit (UX) and explorer nodes for cycle arcs
   const exitNode = nodes.find((n) => n.nodeType === GRAPH_NODE_TYPES.EXIT);
   const explorerNode = nodes.find((n) => n.role === AGENT_ROLES.EXPLORER);
+  const hasLoop = !!(exitNode && explorerNode);
+
+  // Two separate side arcs instead of one wrap-around
+  const rightmostX = nodes.length > 0 ? Math.max(...nodes.map((n) => n.x)) : width;
+  const leftmostX = nodes.length > 0 ? Math.min(...nodes.map((n) => n.x)) : 0;
+  const arcRight = rightmostX + NODE_RADIUS + LOOP_MARGIN;
+  const arcLeft = leftmostX - NODE_RADIUS - LOOP_MARGIN;
+
+  // Right arc: Explorer → UX (clockwise, curves down the right side)
+  const rightArcPath = hasLoop
+    ? `M ${explorerNode!.x + NODE_RADIUS + 8} ${explorerNode!.y}
+       C ${arcRight} ${explorerNode!.y},
+         ${arcRight} ${exitNode!.y},
+         ${exitNode!.x + NODE_RADIUS + 8} ${exitNode!.y}`
+    : "";
+
+  // Left arc: UX → Explorer (clockwise, curves up the left side)
+  const leftArcPath = hasLoop
+    ? `M ${exitNode!.x - NODE_RADIUS - 8} ${exitNode!.y}
+       C ${arcLeft} ${exitNode!.y},
+         ${arcLeft} ${explorerNode!.y},
+         ${explorerNode!.x - NODE_RADIUS - 8} ${explorerNode!.y}`
+    : "";
+
+  const svgViewBox = hasLoop
+    ? `${arcLeft - 15} 0 ${arcRight - arcLeft + 30} ${height}`
+    : `0 0 ${width} ${height}`;
 
   // Collect unique domain columns for labels
   const domainColumns = useMemo(() => {
@@ -222,7 +264,7 @@ export function WorkflowGraph({
       style={{ background: "rgba(20, 21, 31, 0.5)" }}
     >
       <svg
-        viewBox={`0 0 ${width} ${height}`}
+        viewBox={svgViewBox}
         preserveAspectRatio="xMidYMid meet"
         className="h-full max-h-full w-full"
         style={{ minHeight: 300 }}
@@ -240,27 +282,117 @@ export function WorkflowGraph({
               </feMerge>
             </filter>
           ))}
-          <filter id="glow-loop" x="-50%" y="-50%" width="200%" height="200%">
+          {/* Right arc glow (violet) */}
+          <filter id="glow-arc-right" x="-50%" y="-50%" width="200%" height="200%">
             <feGaussianBlur stdDeviation="3" result="blur" />
-            <feFlood floodColor="#B026FF" floodOpacity="0.3" result="color" />
+            <feFlood floodColor={LOOP_COLOR_RIGHT} floodOpacity="0.25" result="color" />
             <feComposite in="color" in2="blur" operator="in" result="glow" />
             <feMerge>
               <feMergeNode in="glow" />
               <feMergeNode in="SourceGraphic" />
             </feMerge>
           </filter>
+          {/* Left arc glow (indigo) */}
+          <filter id="glow-arc-left" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="3" result="blur" />
+            <feFlood floodColor={LOOP_COLOR_LEFT} floodOpacity="0.25" result="color" />
+            <feComposite in="color" in2="blur" operator="in" result="glow" />
+            <feMerge>
+              <feMergeNode in="glow" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+          {/* Arrowhead markers */}
+          <marker id="arrow-right" viewBox="0 0 8 8" refX="8" refY="4"
+            markerWidth="5" markerHeight="5" orient="auto">
+            <path d="M 0 0 L 8 4 L 0 8 z" fill={LOOP_COLOR_RIGHT} fillOpacity="0.7" />
+          </marker>
+          <marker id="arrow-left" viewBox="0 0 8 8" refX="8" refY="4"
+            markerWidth="5" markerHeight="5" orient="auto">
+            <path d="M 0 0 L 8 4 L 0 8 z" fill={LOOP_COLOR_LEFT} fillOpacity="0.7" />
+          </marker>
         </defs>
+
+        {/* ── Cycle arcs (background layer, behind everything) ── */}
+
+        {/* Right arc: Explorer → UX (violet, clockwise down) */}
+        {hasLoop && (
+          <>
+            <path d={rightArcPath} fill="none" stroke={LOOP_COLOR_RIGHT} strokeOpacity={0.04} strokeWidth={1} />
+            <motion.path
+              d={rightArcPath}
+              fill="none"
+              stroke={LOOP_COLOR_RIGHT}
+              strokeWidth={1.5}
+              strokeLinecap="round"
+              filter="url(#glow-arc-right)"
+              markerEnd="url(#arrow-right)"
+              initial={false}
+              animate={{
+                pathLength: isRunning ? 0.35 : 1,
+                pathOffset: isRunning ? [0, 1] : 0,
+                pathSpacing: isRunning ? 0.65 : 0,
+                strokeOpacity: isRunning ? 0.55 : 0.1,
+              }}
+              transition={
+                isRunning
+                  ? {
+                      pathOffset: { duration: 2.5, repeat: Infinity, ease: "linear" },
+                      pathLength: { duration: 0.5 },
+                      pathSpacing: { duration: 0.5 },
+                      strokeOpacity: { duration: 0.5 },
+                    }
+                  : { duration: 0.5 }
+              }
+            />
+          </>
+        )}
+
+        {/* Left arc: UX → Explorer (indigo, clockwise up) */}
+        {hasLoop && (
+          <>
+            <path d={leftArcPath} fill="none" stroke={LOOP_COLOR_LEFT} strokeOpacity={0.04} strokeWidth={1} />
+            <motion.path
+              d={leftArcPath}
+              fill="none"
+              stroke={LOOP_COLOR_LEFT}
+              strokeWidth={1.5}
+              strokeLinecap="round"
+              filter="url(#glow-arc-left)"
+              markerEnd="url(#arrow-left)"
+              initial={false}
+              animate={{
+                pathLength: isRunning ? 0.35 : 1,
+                pathOffset: isRunning ? [0, 1] : 0,
+                pathSpacing: isRunning ? 0.65 : 0,
+                strokeOpacity: isRunning ? 0.55 : 0.1,
+              }}
+              transition={
+                isRunning
+                  ? {
+                      pathOffset: { duration: 2.5, repeat: Infinity, ease: "linear" },
+                      pathLength: { duration: 0.5 },
+                      pathSpacing: { duration: 0.5 },
+                      strokeOpacity: { duration: 0.5 },
+                    }
+                  : { duration: 0.5 }
+              }
+            />
+          </>
+        )}
 
         {/* ── Domain column labels ─────────────────────────── */}
         {domainColumns.map(({ domain, x }) => {
           const isDomainActive = activeDomainSet.size === 0 || activeDomainSet.has(domain);
+          const domainColor = DOMAIN_COLORS[domain] ?? "rgba(255,255,255,0.4)";
           return (
             <text
               key={`domain-label-${domain}`}
               x={x}
               y={PADDING_Y + LAYER_GAP * 1.5}
               textAnchor="middle"
-              fill={isDomainActive ? "rgba(255,255,255,0.4)" : "rgba(255,255,255,0.12)"}
+              fill={domainColor}
+              opacity={isDomainActive ? 0.7 : 0.2}
               fontSize={8}
               fontFamily="var(--font-body)"
               letterSpacing="0.15em"
@@ -317,32 +449,6 @@ export function WorkflowGraph({
           );
         })}
 
-        {/* ── Loop-back arc ──────────────────────────────── */}
-        {exitNode && explorerNode && (
-          <motion.path
-            d={`M ${exitNode.x + NODE_RADIUS + 8} ${exitNode.y}
-                C ${exitNode.x + NODE_RADIUS + 60} ${exitNode.y},
-                  ${exitNode.x + NODE_RADIUS + 60} ${explorerNode.y},
-                  ${explorerNode.x + NODE_RADIUS + 8} ${explorerNode.y}`}
-            fill="none"
-            stroke="#B026FF"
-            strokeWidth={2}
-            strokeDasharray="8 6"
-            strokeLinecap="round"
-            filter="url(#glow-loop)"
-            initial={false}
-            animate={{
-              strokeDashoffset: isRunning ? [-28, 0] : 0,
-              strokeOpacity: isRunning ? 0.7 : 0.2,
-            }}
-            transition={
-              isRunning
-                ? { strokeDashoffset: { duration: 1.5, repeat: Infinity, ease: "linear" }, strokeOpacity: { duration: 0.5 } }
-                : { duration: 0.5 }
-            }
-          />
-        )}
-
         {/* ── Cycle badge ────────────────────────────────── */}
         <AnimatePresence>
           {cycle > 0 && (
@@ -386,11 +492,12 @@ export function WorkflowGraph({
               <AnimatePresence>
                 {isCurrent && (
                   <motion.circle
+                    key={`breathe-${node.role}`}
                     cx={node.x} cy={node.y} r={NODE_RADIUS + 8}
                     fill="none" stroke={node.color} strokeWidth={1.5}
                     initial={{ scale: 0.8, opacity: 0 }}
                     animate={{ scale: [1, 1.12, 1], opacity: [0.3, 0.6, 0.3] }}
-                    exit={{ scale: 0.8, opacity: 0 }}
+                    exit={{ scale: 0.8, opacity: 0, transition: { duration: 0.4 } }}
                     transition={BREATHE_TRANSITION}
                     style={{ transformOrigin: `${node.x}px ${node.y}px` }}
                   />
@@ -405,47 +512,75 @@ export function WorkflowGraph({
               )}
 
               {/* Glass backdrop */}
-              <circle cx={node.x} cy={node.y} r={NODE_RADIUS}
+              <motion.circle cx={node.x} cy={node.y} r={NODE_RADIUS}
                 fill={isCurrent ? node.color : "rgba(20, 21, 31, 0.6)"}
-                fillOpacity={isCurrent ? 0.2 : 1}
+                initial={false}
+                animate={{
+                  fillOpacity: isCurrent ? 0.2 : 1,
+                  strokeWidth: isCurrent ? 2.5 : isCompleted ? 1.5 : 0.5,
+                  strokeOpacity: isDimmed ? 0.06 : isCurrent ? 1 : isCompleted ? 0.4 : 0.08,
+                }}
                 stroke={
                   isDimmed ? "rgba(255,255,255,0.06)"
                     : isCurrent ? node.color
                     : isCompleted ? node.color
                     : "rgba(255,255,255,0.08)"
                 }
-                strokeWidth={isCurrent ? 2.5 : isCompleted ? 1.5 : 0.5}
-                strokeDasharray={isDimmed ? "4 3" : "none"} />
+                strokeDasharray={isDimmed ? "4 3" : "none"}
+                transition={{ duration: 0.6, ease: "easeOut" }} />
 
               {/* Agent color fill — only visible when active or completed */}
-              <circle cx={node.x} cy={node.y} r={NODE_RADIUS}
+              <motion.circle cx={node.x} cy={node.y} r={NODE_RADIUS}
                 fill={node.color}
-                fillOpacity={isCurrent ? 0.25 : isCompleted ? 0.12 : 0}
-                filter={isCurrent ? `url(#glow-${node.role})` : undefined} />
+                initial={false}
+                animate={{
+                  fillOpacity: isCurrent ? 0.25 : isCompleted ? 0.08 : 0,
+                }}
+                filter={isCurrent ? `url(#glow-${node.role})` : "none"}
+                transition={{ duration: 0.6, ease: "easeOut" }} />
 
-              {/* Icon */}
-              {isCompleted ? (
-                <motion.g
-                  transform={`translate(${node.x - 7}, ${node.y - 7})`}
-                  initial={{ scale: 0, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  transition={SPRING}
-                >
-                  <path d="M2 7l4 4L14 3" fill="none" stroke={node.color}
-                    strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
-                </motion.g>
-              ) : (
-                <g transform={`translate(${node.x - 8}, ${node.y - 8}) scale(0.667)`}>
-                  <path d={node.icon} fill="none"
-                    stroke={isCurrent ? node.color : "rgba(176,190,197,0.35)"}
-                    strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
-                </g>
-              )}
+              {/* Icon — always shows domain icon, colored when active/completed */}
+              <g transform={`translate(${node.x - 8}, ${node.y - 8}) scale(0.667)`}>
+                <motion.path
+                  d={node.icon}
+                  fill="none"
+                  strokeWidth={1.5}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  initial={false}
+                  animate={{
+                    stroke: isCurrent ? node.color : isCompleted ? node.color : "rgba(176,190,197,0.35)",
+                    strokeOpacity: isCurrent ? 1 : isCompleted ? 0.7 : 0.35,
+                  }}
+                  transition={{ duration: 0.4 }}
+                />
+              </g>
+
+              {/* Completion badge — small check in bottom-right corner */}
+              <AnimatePresence>
+                {isCompleted && (
+                  <motion.g
+                    key={`check-${node.role}`}
+                    initial={{ scale: 0, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    exit={{ scale: 0, opacity: 0 }}
+                    transition={SPRING}
+                  >
+                    <circle cx={node.x + NODE_RADIUS - 3} cy={node.y + NODE_RADIUS - 3} r={6}
+                      fill="rgba(20, 21, 31, 0.9)" stroke={node.color} strokeWidth={1} />
+                    <path
+                      d={`M ${node.x + NODE_RADIUS - 6} ${node.y + NODE_RADIUS - 3} l 2.5 2.5 L ${node.x + NODE_RADIUS} ${node.y + NODE_RADIUS - 6}`}
+                      fill="none" stroke={node.color} strokeWidth={1.5}
+                      strokeLinecap="round" strokeLinejoin="round" />
+                  </motion.g>
+                )}
+              </AnimatePresence>
 
               {/* Label */}
               <text x={node.x} y={node.y + NODE_RADIUS + 13}
                 textAnchor="middle"
-                fill={isCurrent ? node.color : isCompleted ? node.color : isDimmed ? "rgba(176,190,197,0.2)" : "rgba(176,190,197,0.5)"}
+                fill={node.color}
+                opacity={isCurrent ? 1 : isCompleted ? 0.8 : isDimmed ? 0.15 : 0.6}
                 fontSize={7} fontFamily="var(--font-body)"
                 letterSpacing="0.1em" fontWeight={isCurrent ? 700 : isCompleted ? 600 : 400}>
                 {node.label.toUpperCase()}

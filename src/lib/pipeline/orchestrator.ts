@@ -3,7 +3,7 @@ import { v4 as uuid } from "uuid";
 import { createAgentSession } from "@/lib/copilot/agents";
 import { listModels } from "@/lib/copilot/client";
 import { getAllTasks, getTaskCount, clearAllTasks } from "@/lib/pipeline/task-store";
-import { clearCheatSheet } from "@/lib/pipeline/cheat-sheet-store";
+import { clearCheatSheet, parseCheatSheet, setCheatSheet } from "@/lib/pipeline/cheat-sheet-store";
 import { clearAwards } from "@/lib/pipeline/award-store";
 import {
   createWorktree,
@@ -62,12 +62,13 @@ let currentState: PipelineState = {
   activeAgent: null,
   activeAgents: [],
   activeDomains: [],
+  completedAgents: [],
   runId: null,
   tasksSummary: { total: 0, open: 0, inProgress: 0, resolved: 0, deferred: 0 },
 };
 
 let abortController: AbortController | null = null;
-let activeSession: { abort: () => Promise<void>; destroy: () => Promise<void> } | null = null;
+let activeSessions = new Map<AgentRole, { abort: () => Promise<void>; destroy: () => Promise<void> }>();
 let activeConfig: PipelineConfig | null = null;
 
 // ─── SSE broadcasting ────────────────────────────────────────────────────────
@@ -167,6 +168,11 @@ async function runAgent(
   if (!currentState.activeAgents.includes(role)) {
     currentState.activeAgents = [...currentState.activeAgents, role];
   }
+  // Track active domains from domain-specific agents
+  const domain = getDomainFromRole(role);
+  if (domain && !currentState.activeDomains.includes(domain)) {
+    currentState.activeDomains = [...currentState.activeDomains, domain];
+  }
   emitStateChange();
 
   broadcast({
@@ -181,11 +187,11 @@ async function runAgent(
 
   try {
     const session = await createAgentSession(role, config, overrides);
-    activeSession = session;
+    activeSessions.set(role, session);
 
     if (signal.aborted) {
       await session.destroy().catch(() => {});
-      activeSession = null;
+      activeSessions.delete(role);
       return;
     }
 
@@ -227,8 +233,20 @@ async function runAgent(
     // Forward session events to SSE and capture token usage
     let lastInputTokens = 0;
     let lastOutputTokens = 0;
+    let accumulatedText = "";
+
+    // Create a promise that resolves when the session reports idle
+    // (all tool calls finished, no pending work)
+    let resolveIdle: () => void;
+    const idlePromise = new Promise<void>((resolve) => { resolveIdle = resolve; });
+    let idleResolved = false;
 
     session.on((event: { type: string; data?: Record<string, unknown> }) => {
+      // session.idle = session has NO pending work — safe to destroy
+      if (event.type === "session.idle" && !idleResolved) {
+        idleResolved = true;
+        resolveIdle();
+      }
       if (event.type === "assistant.usage" && event.data) {
         const cumulativeInput = (event.data.inputTokens as number) ?? 0;
         const cumulativeOutput = (event.data.outputTokens as number) ?? 0;
@@ -239,6 +257,11 @@ async function runAgent(
         if (deltaInput > 0 || deltaOutput > 0) {
           recordAgentTokens(role, deltaInput, deltaOutput);
         }
+      }
+      // Accumulate streaming text for cheat sheet extraction
+      if (event.type === "assistant.message_delta" && event.data) {
+        const chunk = (event.data.content as string) ?? "";
+        if (chunk) accumulatedText += chunk;
       }
       broadcast({
         type: event.type as SSEEvent["type"],
@@ -267,6 +290,22 @@ async function runAgent(
         },
       });
 
+      // Immediately remove from activeAgents so the UI stops showing active state.
+      // Session cleanup (idle wait, destroy) happens in the finally block,
+      // but the agent's work is done once sendAndWait returns.
+      currentState.activeAgents = currentState.activeAgents.filter((r) => r !== role);
+      if (!currentState.completedAgents.includes(role)) {
+        currentState.completedAgents = [...currentState.completedAgents, role];
+      }
+      const agentDomain = getDomainFromRole(role);
+      if (agentDomain) {
+        const domainStillActive = currentState.activeAgents.some((r) => getDomainFromRole(r) === agentDomain);
+        if (!domainStillActive) {
+          currentState.activeDomains = currentState.activeDomains.filter((d) => d !== agentDomain);
+        }
+      }
+      emitStateChange();
+
       // Convergence check — gate nodes (Analyst or Consolidator)
       if (
         (role === AGENT_ROLES.ANALYST || role === AGENT_ROLES.CONSOLIDATOR) &&
@@ -278,8 +317,34 @@ async function runAgent(
           emitStateChange();
         }
       }
+
+      // Extract cheat sheet from Researcher output
+      if (role === AGENT_ROLES.RESEARCHER) {
+        const responseText = (response?.data?.content as string) ?? accumulatedText;
+        const extracted = parseCheatSheet(responseText);
+        if (extracted) {
+          setCheatSheet(config.projectPath, extracted);
+          broadcast({
+            type: SESSION_EVENT_TYPES.AGENT_END,
+            timestamp: new Date().toISOString(),
+            agent: role,
+            data: { cheatSheetExtracted: true, cheatSheetLength: extracted.length },
+          });
+        } else if (accumulatedText && accumulatedText !== responseText) {
+          // Fallback: try accumulated streaming text if sendAndWait response didn't contain delimiters
+          const fallback = parseCheatSheet(accumulatedText);
+          if (fallback) {
+            setCheatSheet(config.projectPath, fallback);
+          }
+        }
+      }
     } finally {
-      activeSession = null;
+      // Wait for session.idle (all tool calls complete) before destroying
+      // Use a timeout to avoid blocking forever if idle never fires
+      if (!idleResolved) {
+        await Promise.race([idlePromise, new Promise<void>((r) => setTimeout(r, 30_000))]);
+      }
+      activeSessions.delete(role);
       await session.destroy().catch(() => {});
     }
   } catch (err) {
@@ -293,10 +358,19 @@ async function runAgent(
         cycle,
       },
     });
+    // Remove from activeAgents on error too
+    currentState.activeAgents = currentState.activeAgents.filter((r) => r !== role);
+    const errDomain = getDomainFromRole(role);
+    if (errDomain) {
+      const domainStillActive = currentState.activeAgents.some((r) => getDomainFromRole(r) === errDomain);
+      if (!domainStillActive) {
+        currentState.activeDomains = currentState.activeDomains.filter((d) => d !== errDomain);
+      }
+    }
+    emitStateChange();
   }
 
-  // Remove from activeAgents when done
-  currentState.activeAgents = currentState.activeAgents.filter((r) => r !== role);
+  refreshTasksSummary();
   emitStateChange();
 }
 
@@ -496,6 +570,9 @@ async function runPipeline(config: PipelineConfig): Promise<void> {
     currentState.status = PIPELINE_STATUSES.STOPPED;
   }
   currentState.activeAgent = null;
+  currentState.activeAgents = [];
+  currentState.activeDomains = [];
+  activeSessions.clear();
 
   // Clean up any remaining worktrees
   if (config.enableWorktreeIsolation) {
@@ -507,7 +584,7 @@ async function runPipeline(config: PipelineConfig): Promise<void> {
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
-export function startPipeline(config: PipelineConfig): string {
+export function startPipeline(config: PipelineConfig, options?: { resume?: boolean }): string {
   if (currentState.status === PIPELINE_STATUSES.RUNNING) {
     throw new Error("Pipeline is already running");
   }
@@ -516,17 +593,23 @@ export function startPipeline(config: PipelineConfig): string {
   abortController = new AbortController();
   activeConfig = config;
 
-  // Clear previous run state: tasks, cheat sheet, awards
-  clearAllTasks();
-  clearCheatSheet(config.projectPath);
-  clearAwards();
+  const isResume = options?.resume === true;
+
+  if (!isResume) {
+    // Fresh run: clear previous state
+    clearAllTasks();
+    clearCheatSheet(config.projectPath);
+    clearAwards();
+  }
+  // Resume: keep existing tasks, cheat sheet, and awards
 
   currentState = {
     status: PIPELINE_STATUSES.RUNNING,
-    currentCycle: 0,
+    currentCycle: isResume ? (currentState.currentCycle || 0) : 0,
     activeAgent: null,
     activeAgents: [],
     activeDomains: [],
+    completedAgents: [],
     runId,
     tasksSummary: { total: 0, open: 0, inProgress: 0, resolved: 0, deferred: 0 },
   };
@@ -549,10 +632,11 @@ export function startPipeline(config: PipelineConfig): string {
 }
 
 export function stopPipeline(): void {
-  if (activeSession) {
-    activeSession.abort().catch(() => {});
-    activeSession = null;
+  // Abort all active sessions
+  for (const [, session] of activeSessions) {
+    session.abort().catch(() => {});
   }
+  activeSessions.clear();
   if (abortController) {
     abortController.abort();
     abortController = null;
@@ -564,6 +648,8 @@ export function stopPipeline(): void {
   activeConfig = null;
   currentState.status = PIPELINE_STATUSES.STOPPED;
   currentState.activeAgent = null;
+  currentState.activeAgents = [];
+  currentState.activeDomains = [];
   emitStateChange();
 }
 

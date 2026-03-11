@@ -12,6 +12,7 @@ export type Severity = (typeof SEVERITIES)[keyof typeof SEVERITIES];
 export const TASK_STATUSES = {
   OPEN: "open",
   IN_PROGRESS: "in-progress",
+  BLOCKED: "blocked",
   RESOLVED: "resolved",
   DEFERRED: "deferred",
   WONT_FIX: "wont-fix",
@@ -169,6 +170,8 @@ export interface Task {
   title: string;
   severity: Severity;
   status: TaskStatus;
+  /** Why this status was set — required for blocked, deferred, wont-fix */
+  statusReason?: string;
   component: string;
   cycle: number;
   files: string[];
@@ -217,6 +220,7 @@ export interface PipelineState {
   activeAgent: AgentRole | null;
   activeAgents: AgentRole[];
   activeDomains: Domain[];
+  completedAgents: AgentRole[];
   runId: string | null;
   researcherCheatSheet?: string;
   tasksSummary: {

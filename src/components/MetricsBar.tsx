@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useEffect } from "react";
 import { motion, useMotionValue, useSpring } from "framer-motion";
+import { AnimateNumber } from "motion-plus/react";
 import type { PipelineState, Task } from "@/lib/types";
 import { TASK_STATUSES, SEVERITIES } from "@/lib/types";
 import { AGENT_VISUALS } from "@/lib/agent-visuals";
@@ -17,7 +18,7 @@ interface MetricsSnapshot {
   compactions?: number;
   contextUsage?: number;
 }
-// ─── Animated counter hook ────────────────────────────────────────────────────
+// ─── Animated counter hook — used for MetricCards ────────────────────────────
 
 function useAnimatedValue(target: number) {
   const [display, setDisplay] = useState(0);
@@ -112,7 +113,11 @@ export function MetricsBar({ pipelineState, tasks }: MetricsBarProps) {
           Cycles Completed
         </p>
         <p className="mt-1 font-mono text-3xl font-bold text-accent">
-          <AnimatedNumber value={pipelineState.currentCycle} />
+          <AnimateNumber
+            transition={{ type: "spring", stiffness: 100, damping: 20 }}
+          >
+            {pipelineState.currentCycle}
+          </AnimateNumber>
         </p>
       </motion.div>
 
@@ -228,11 +233,6 @@ export function MetricsBar({ pipelineState, tasks }: MetricsBarProps) {
 
 // ─── Helper component ────────────────────────────────────────────────────────
 
-function AnimatedNumber({ value }: { value: number }) {
-  const display = useAnimatedValue(value);
-  return <>{display}</>;
-}
-
 function MetricCard({
   label,
   value,
@@ -242,7 +242,6 @@ function MetricCard({
   value: number;
   color: string;
 }) {
-  const display = useAnimatedValue(value);
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.95 }}
@@ -251,7 +250,11 @@ function MetricCard({
       className="glass-panel rounded-xl p-2.5 text-center"
     >
       <p className={`font-mono text-lg font-bold ${color}`}>
-        {display}
+        <AnimateNumber
+          transition={{ type: "spring", stiffness: 120, damping: 20 }}
+        >
+          {value}
+        </AnimateNumber>
       </p>
       <p className="text-[10px] text-text-muted">{label}</p>
     </motion.div>

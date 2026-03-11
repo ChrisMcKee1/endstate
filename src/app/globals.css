@@ -107,22 +107,30 @@
   /* Glass fills */
   --color-glass-cyan: rgba(0, 229, 255, 0.04);
 
-  /* Agent colors */
+  /* Agent colors — standalone agents */
   --color-agent-researcher: #FF6B6B;
   --color-agent-explorer: #00E5FF;
   --color-agent-analyst: #B026FF;
   --color-agent-fixer: #00FFA3;
   --color-agent-ux: #FFB800;
-  --color-agent-simplifier: #FF69B4;
-  --color-agent-analyst-ui: #00E5FF;
-  --color-agent-analyst-backend: #B026FF;
-  --color-agent-analyst-database: #FFD700;
-  --color-agent-analyst-docs: #FF69B4;
-  --color-agent-fixer-ui: #00FFA3;
-  --color-agent-fixer-backend: #00FFA3;
-  --color-agent-fixer-database: #00FFA3;
-  --color-agent-fixer-docs: #00FFA3;
-  --color-agent-consolidator: #FFD700;
+  --color-agent-simplifier: #A78BFA;
+  --color-agent-consolidator: #38BDF8;
+
+  /* Domain colors — shared by analyst+fixer pairs */
+  --color-domain-ui: #00E5FF;
+  --color-domain-backend: #B026FF;
+  --color-domain-database: #FFD700;
+  --color-domain-docs: #FF69B4;
+
+  /* Agent domain variants — reference domain colors */
+  --color-agent-analyst-ui: var(--color-domain-ui);
+  --color-agent-analyst-backend: var(--color-domain-backend);
+  --color-agent-analyst-database: var(--color-domain-database);
+  --color-agent-analyst-docs: var(--color-domain-docs);
+  --color-agent-fixer-ui: var(--color-domain-ui);
+  --color-agent-fixer-backend: var(--color-domain-backend);
+  --color-agent-fixer-database: var(--color-domain-database);
+  --color-agent-fixer-docs: var(--color-domain-docs);
 
   /* Severity */
   --color-severity-critical: #EF4444;
@@ -354,6 +362,13 @@ body {
   --color-agent-analyst: #20c20e;
   --color-agent-fixer: #20c20e;
   --color-agent-ux: #20c20e;
+  --color-agent-researcher: #20c20e;
+  --color-agent-consolidator: #20c20e;
+  --color-agent-simplifier: #20c20e;
+  --color-domain-ui: #20c20e;
+  --color-domain-backend: #20c20e;
+  --color-domain-database: #20c20e;
+  --color-domain-docs: #20c20e;
   --color-status-live: #20c20e;
   --color-status-paused: #18a018;
   --color-status-idle: #0e8a0e;
@@ -379,6 +394,13 @@ body {
   --color-agent-analyst: #ffcc00;
   --color-agent-fixer: #33ff33;
   --color-agent-ux: #ff6666;
+  --color-agent-researcher: #ff6666;
+  --color-agent-consolidator: #ffcc00;
+  --color-agent-simplifier: #cc99ff;
+  --color-domain-ui: #33ff33;
+  --color-domain-backend: #ffcc00;
+  --color-domain-database: #ffcc00;
+  --color-domain-docs: #ff6666;
   --color-status-live: #33ff33;
   --color-status-paused: #ffcc00;
   --color-status-idle: #1a8a1a;

@@ -58,21 +58,13 @@ Classify the project for downstream agents:
 
 ### Step 5: Report Findings
 
-Create a task titled "Project Research Complete" with severity LOW and component "Research" containing:
-- Tech stack summary
-- How to start the app
-- Key URLs and ports
-- Project type classification
-- Architecture overview
-- Any blockers or concerns
+Do NOT create a task for your research. Your research output is not a task — it is project knowledge that powers every downstream agent.
 
-This task becomes the reference document for all subsequent agents.
+If you discover genuine blockers (app won't start, missing config, broken dependencies), create tasks for THOSE specific issues with appropriate severity.
 
 ## Output
 
-Use `create_task` for your findings. Be thorough - every subsequent agent will rely on your research.
-
-After creating the task, you MUST also output a cheat sheet between delimiters. This cheat sheet is injected into the system prompt of every downstream agent so they don't need to re-explore the project from scratch. Format:
+You MUST output a cheat sheet between delimiters. This cheat sheet is injected into the system prompt of every downstream agent so they don't need to re-explore the project from scratch. Format:
 
 ```
 ---CHEAT-SHEET-START---

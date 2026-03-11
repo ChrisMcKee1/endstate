@@ -23,6 +23,8 @@ const entryVariants = {
   visible: { opacity: 1, x: 0, transition: { type: "spring" as const, stiffness: 500, damping: 30 } },
 };
 
+const viewportOnce = { once: true, margin: "-20px" as const };
+
 const toolExpandVariants = {
   collapsed: { height: 0, opacity: 0 },
   expanded: { height: "auto", opacity: 1, transition: { type: "spring" as const, stiffness: 300, damping: 25 } },
@@ -139,7 +141,8 @@ export function AgentStream({ entries, activeAgent }: AgentStreamProps) {
           key={entry.id}
           variants={entryVariants}
           initial="hidden"
-          animate="visible"
+          whileInView="visible"
+          viewport={viewportOnce}
           className={`group relative flex gap-2.5 px-4 py-1.5 transition-colors hover:bg-white/[0.02] ${
             isError ? "bg-severity-critical/5" : ""
           } bg-gradient-to-r ${colors.gradient} to-transparent`}

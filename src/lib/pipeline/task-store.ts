@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { recordTaskCreated, recordTaskResolved } from "@/lib/otel/metrics";
 import type {
   Task,
   TaskCreateInput,
@@ -145,6 +146,7 @@ export function createTask(input: TaskCreateInput, projectPath?: string): Task {
 
   state.tasks.set(id, task);
   writeToDisk(state, task);
+  recordTaskCreated();
   return task;
 }
 
@@ -178,6 +180,7 @@ export function updateTask(input: TaskUpdateInput, projectPath?: string): Task {
     task.status = input.status;
     if (input.status === TASK_STATUSES.RESOLVED) {
       task.resolvedAt = now;
+      recordTaskResolved();
     }
   }
 

@@ -7,7 +7,8 @@ import { withApiTiming } from "@/lib/otel/metrics";
 export async function POST(request: Request) {
   return withApiTiming("pipeline.start", async () => {
     try {
-      const body: unknown = await request.json();
+      const body = await request.json() as Record<string, unknown>;
+      const resume = body.resume === true;
       const config = PipelineConfigSchema.parse(body);
 
       const state = getPipelineState();
@@ -18,9 +19,9 @@ export async function POST(request: Request) {
         );
       }
 
-      const runId = startPipeline(config);
+      const runId = startPipeline(config, { resume });
 
-      return NextResponse.json({ runId, status: "started" }, { status: 200 });
+      return NextResponse.json({ runId, status: resume ? "resumed" : "started" }, { status: 200 });
     } catch (err) {
       if (err instanceof z.ZodError) {
         return NextResponse.json(

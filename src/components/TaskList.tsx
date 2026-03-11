@@ -17,6 +17,7 @@ const SEVERITY_STYLES: Record<Severity, { color: string; bg: string; glow: strin
 const STATUS_COLORS: Record<TaskStatus, string> = {
   [TASK_STATUSES.OPEN]: "text-text-secondary",
   [TASK_STATUSES.IN_PROGRESS]: "text-accent",
+  [TASK_STATUSES.BLOCKED]: "text-severity-high",
   [TASK_STATUSES.RESOLVED]: "text-status-live",
   [TASK_STATUSES.DEFERRED]: "text-text-muted",
   [TASK_STATUSES.WONT_FIX]: "text-text-muted",
@@ -24,7 +25,7 @@ const STATUS_COLORS: Record<TaskStatus, string> = {
 
 type SortKey = "severity" | "status" | "cycle";
 type FilterSeverity = Severity | "ALL";
-type FilterStatus = "ALL" | "ACTIVE" | "DONE";
+type FilterStatus = "ALL" | "ACTIVE" | "BLOCKED" | "DONE" | "SKIPPED";
 
 const SEVERITY_ORDER: Record<Severity, number> = {
   [SEVERITIES.CRITICAL]: 0,
@@ -34,14 +35,16 @@ const SEVERITY_ORDER: Record<Severity, number> = {
 };
 
 const STATUS_ORDER: Record<TaskStatus, number> = {
-  [TASK_STATUSES.IN_PROGRESS]: 0,
-  [TASK_STATUSES.OPEN]: 1,
-  [TASK_STATUSES.DEFERRED]: 2,
-  [TASK_STATUSES.RESOLVED]: 3,
-  [TASK_STATUSES.WONT_FIX]: 4,
+  [TASK_STATUSES.BLOCKED]: 0,
+  [TASK_STATUSES.IN_PROGRESS]: 1,
+  [TASK_STATUSES.OPEN]: 2,
+  [TASK_STATUSES.DEFERRED]: 3,
+  [TASK_STATUSES.RESOLVED]: 4,
+  [TASK_STATUSES.WONT_FIX]: 5,
 };
 
 const DONE_STATUSES = new Set<TaskStatus>([TASK_STATUSES.RESOLVED, TASK_STATUSES.WONT_FIX]);
+const SKIPPED_STATUSES = new Set<TaskStatus>([TASK_STATUSES.DEFERRED, TASK_STATUSES.WONT_FIX]);
 
 const SPRING = { type: "spring" as const, stiffness: 400, damping: 30 };
 const STAGGER = { staggerChildren: 0.04 };
@@ -49,10 +52,10 @@ const STAGGER = { staggerChildren: 0.04 };
 const ALL_DOMAINS = Object.values(DOMAINS) as Domain[];
 
 const DOMAIN_STYLES: Record<Domain, { label: string; color: string; bg: string }> = {
-  [DOMAINS.UI]: { label: "UI", color: "text-agent-explorer", bg: "bg-agent-explorer/15" },
-  [DOMAINS.BACKEND]: { label: "BE", color: "text-agent-analyst", bg: "bg-agent-analyst/15" },
-  [DOMAINS.DATABASE]: { label: "DB", color: "text-agent-violet", bg: "bg-agent-violet/15" },
-  [DOMAINS.DOCS]: { label: "Docs", color: "text-agent-ux", bg: "bg-agent-ux/15" },
+  [DOMAINS.UI]: { label: "UI", color: "text-agent-analyst-ui", bg: "bg-agent-analyst-ui/15" },
+  [DOMAINS.BACKEND]: { label: "BE", color: "text-agent-analyst-backend", bg: "bg-agent-analyst-backend/15" },
+  [DOMAINS.DATABASE]: { label: "DB", color: "text-agent-analyst-database", bg: "bg-agent-analyst-database/15" },
+  [DOMAINS.DOCS]: { label: "Docs", color: "text-agent-analyst-docs", bg: "bg-agent-analyst-docs/15" },
 };
 
 const TASK_PREFS_KEY = "endstate-task-prefs";
@@ -73,12 +76,12 @@ function saveTaskPrefs(sortBy: SortKey, filterSeverity: FilterSeverity, filterSt
 
 // ─── Status Icon Component ──────────────────────────────────────────────────
 
-function StatusIcon({ status }: { status: TaskStatus }) {
+function StatusIcon({ status, isRunning = false }: { status: TaskStatus; isRunning?: boolean }) {
   if (status === TASK_STATUSES.IN_PROGRESS) {
     return (
       <motion.svg
-        animate={{ rotate: 360 }}
-        transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+        animate={isRunning ? { rotate: 360 } : { rotate: 0 }}
+        transition={isRunning ? { duration: 2, repeat: Infinity, ease: "linear" } : { duration: 0 }}
         className="h-3.5 w-3.5 text-accent"
         fill="none"
         viewBox="0 0 24 24"
@@ -87,6 +90,14 @@ function StatusIcon({ status }: { status: TaskStatus }) {
       >
         <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182" />
       </motion.svg>
+    );
+  }
+
+  if (status === TASK_STATUSES.BLOCKED) {
+    return (
+      <svg className="h-3.5 w-3.5 text-severity-high" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+      </svg>
     );
   }
 
@@ -107,16 +118,27 @@ function StatusIcon({ status }: { status: TaskStatus }) {
     );
   }
 
-  const iconMap: Record<string, string> = {
-    [TASK_STATUSES.OPEN]: "○",
-    [TASK_STATUSES.DEFERRED]: "◌",
-    [TASK_STATUSES.WONT_FIX]: "✕",
-  };
+  if (status === TASK_STATUSES.DEFERRED) {
+    return (
+      <svg className="h-3.5 w-3.5 text-text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+    );
+  }
 
+  if (status === TASK_STATUSES.WONT_FIX) {
+    return (
+      <svg className="h-3.5 w-3.5 text-text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+      </svg>
+    );
+  }
+
+  // OPEN — empty circle
   return (
-    <span className={`font-mono text-sm ${STATUS_COLORS[status]}`}>
-      {iconMap[status] ?? "○"}
-    </span>
+    <svg className="h-3.5 w-3.5 text-text-secondary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <circle cx="12" cy="12" r="9" />
+    </svg>
   );
 }
 
@@ -126,9 +148,10 @@ interface TaskListProps {
   tasks: Task[];
   onSelectTask: (task: Task) => void;
   onRefreshTasks?: () => void;
+  isRunning?: boolean;
 }
 
-export function TaskList({ tasks, onSelectTask, onRefreshTasks }: TaskListProps) {
+export function TaskList({ tasks, onSelectTask, onRefreshTasks, isRunning = false }: TaskListProps) {
   const [sortBy, setSortBy] = useState<SortKey>(() => loadTaskPrefs()?.sortBy ?? "severity");
   const [filterSeverity, setFilterSeverity] = useState<FilterSeverity>(() => loadTaskPrefs()?.filterSeverity ?? "ALL");
   const [filterStatus, setFilterStatus] = useState<FilterStatus>(() => loadTaskPrefs()?.filterStatus ?? "ALL");
@@ -137,6 +160,7 @@ export function TaskList({ tasks, onSelectTask, onRefreshTasks }: TaskListProps)
     return saved?.length ? new Set(saved) : new Set<Domain>();
   });
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [filterCycles, setFilterCycles] = useState<Set<number>>(new Set());
 
   useEffect(() => {
     saveTaskPrefs(sortBy, filterSeverity, filterStatus, [...filterDomains]);
@@ -155,9 +179,13 @@ export function TaskList({ tasks, onSelectTask, onRefreshTasks }: TaskListProps)
       filtered = filtered.filter((t) => t.severity === filterSeverity);
     }
     if (filterStatus === "ACTIVE") {
-      filtered = filtered.filter((t) => !DONE_STATUSES.has(t.status));
+      filtered = filtered.filter((t) => t.status === TASK_STATUSES.OPEN || t.status === TASK_STATUSES.IN_PROGRESS);
+    } else if (filterStatus === "BLOCKED") {
+      filtered = filtered.filter((t) => t.status === TASK_STATUSES.BLOCKED);
     } else if (filterStatus === "DONE") {
-      filtered = filtered.filter((t) => DONE_STATUSES.has(t.status));
+      filtered = filtered.filter((t) => t.status === TASK_STATUSES.RESOLVED);
+    } else if (filterStatus === "SKIPPED") {
+      filtered = filtered.filter((t) => SKIPPED_STATUSES.has(t.status));
     }
     // Domain filter: task must match ALL selected domains
     if (filterDomains.size > 0) {
@@ -168,6 +196,10 @@ export function TaskList({ tasks, onSelectTask, onRefreshTasks }: TaskListProps)
         }
         return true;
       });
+    }
+    // Cycle filter: task must be from one of the selected cycles
+    if (filterCycles.size > 0) {
+      filtered = filtered.filter((t) => filterCycles.has(t.cycle));
     }
 
     return [...filtered].sort((a, b) => {
@@ -182,7 +214,13 @@ export function TaskList({ tasks, onSelectTask, onRefreshTasks }: TaskListProps)
           return 0;
       }
     });
-  }, [tasks, sortBy, filterSeverity, filterStatus, filterDomains]);
+  }, [tasks, sortBy, filterSeverity, filterStatus, filterDomains, filterCycles]);
+
+  // Derive unique cycles from all tasks for the filter chips
+  const availableCycles = useMemo(() => {
+    const cycles = new Set(tasks.map((t) => t.cycle));
+    return [...cycles].sort((a, b) => a - b);
+  }, [tasks]);
 
   const counts = useMemo(() => {
     const open = tasks.filter(
@@ -209,6 +247,14 @@ export function TaskList({ tasks, onSelectTask, onRefreshTasks }: TaskListProps)
     setFilterDomains((prev) => {
       const next = new Set(prev);
       if (next.has(domain)) next.delete(domain); else next.add(domain);
+      return next;
+    });
+  }, []);
+
+  const toggleCycle = useCallback((cycle: number) => {
+    setFilterCycles((prev) => {
+      const next = new Set(prev);
+      if (next.has(cycle)) next.delete(cycle); else next.add(cycle);
       return next;
     });
   }, []);
@@ -315,7 +361,7 @@ export function TaskList({ tasks, onSelectTask, onRefreshTasks }: TaskListProps)
         <select
           value={sortBy}
           onChange={(e) => setSortBy(e.target.value as SortKey)}
-          className="rounded-lg border border-border-subtle bg-void/50 px-2 py-1 text-[10px] text-text-secondary focus:border-accent/50 focus:outline-none"
+          className="rounded-lg border border-border-subtle bg-overlay px-2 py-1 text-[10px] text-text-primary focus:border-accent/50 focus:outline-none [&>option]:bg-overlay [&>option]:text-text-primary"
         >
           <option value="severity">Severity</option>
           <option value="status">Status</option>
@@ -325,7 +371,7 @@ export function TaskList({ tasks, onSelectTask, onRefreshTasks }: TaskListProps)
         <select
           value={filterSeverity}
           onChange={(e) => setFilterSeverity(e.target.value as FilterSeverity)}
-          className="rounded-lg border border-border-subtle bg-void/50 px-2 py-1 text-[10px] text-text-secondary focus:border-accent/50 focus:outline-none"
+          className="rounded-lg border border-border-subtle bg-overlay px-2 py-1 text-[10px] text-text-primary focus:border-accent/50 focus:outline-none [&>option]:bg-overlay [&>option]:text-text-primary"
         >
           <option value="ALL">All</option>
           <option value="CRITICAL">Critical</option>
@@ -337,11 +383,13 @@ export function TaskList({ tasks, onSelectTask, onRefreshTasks }: TaskListProps)
         <select
           value={filterStatus}
           onChange={(e) => setFilterStatus(e.target.value as FilterStatus)}
-          className="rounded-lg border border-border-subtle bg-void/50 px-2 py-1 text-[10px] text-text-secondary focus:border-accent/50 focus:outline-none"
+          className="rounded-lg border border-border-subtle bg-overlay px-2 py-1 text-[10px] text-text-primary focus:border-accent/50 focus:outline-none [&>option]:bg-overlay [&>option]:text-text-primary"
         >
           <option value="ALL">All Status</option>
           <option value="ACTIVE">Active</option>
+          <option value="BLOCKED">Blocked</option>
           <option value="DONE">Done</option>
+          <option value="SKIPPED">Skipped</option>
         </select>
       </div>
 
@@ -374,6 +422,39 @@ export function TaskList({ tasks, onSelectTask, onRefreshTasks }: TaskListProps)
           </button>
         )}
       </div>
+
+      {/* Cycle filter chips */}
+      {availableCycles.length > 1 && (
+        <div className="flex items-center gap-1.5 border-b border-border-subtle px-3 py-1.5" style={{ background: "rgba(20, 21, 31, 0.25)" }}>
+          <span className="text-[9px] uppercase tracking-widest text-text-muted/60 shrink-0">Cycle</span>
+          {availableCycles.map((cycle) => {
+            const isActive = filterCycles.has(cycle);
+            const count = tasks.filter((t) => t.cycle === cycle).length;
+            return (
+              <button
+                key={cycle}
+                onClick={() => toggleCycle(cycle)}
+                className={`rounded-full px-2 py-0.5 text-[9px] font-semibold tabular-nums transition-all ${
+                  isActive
+                    ? "bg-accent/15 text-accent ring-1 ring-accent/20"
+                    : "bg-white/[0.03] text-text-muted/50 hover:bg-white/[0.06] hover:text-text-muted"
+                }`}
+              >
+                C{cycle}
+                <span className="ml-0.5 text-[8px] opacity-60">{count}</span>
+              </button>
+            );
+          })}
+          {filterCycles.size > 0 && (
+            <button
+              onClick={() => setFilterCycles(new Set())}
+              className="ml-auto text-[9px] text-text-muted/50 hover:text-text-secondary"
+            >
+              Clear
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Add task form */}
       <AnimatePresence>
@@ -495,7 +576,7 @@ export function TaskList({ tasks, onSelectTask, onRefreshTasks }: TaskListProps)
 
                     {/* Status icon */}
                     <span className="mt-0.5 shrink-0">
-                      <StatusIcon status={task.status} />
+                      <StatusIcon status={task.status} isRunning={isRunning} />
                     </span>
 
                     {/* Content — clickable to view detail */}

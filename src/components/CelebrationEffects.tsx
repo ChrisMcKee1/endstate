@@ -185,6 +185,8 @@ export function CelebrationEffects({ tasks, events }: CelebrationEffectsProps) {
 
   // Seed initial resolved count from tasks to avoid re-firing on remount
   const initialized = useRef(false);
+  // Only evaluate task-based achievements after seeing agent activity this session
+  const hasSeenAgentActivity = useRef(false);
   useEffect(() => {
     if (!initialized.current && tasks.length > 0) {
       initialized.current = true;
@@ -228,6 +230,10 @@ export function CelebrationEffects({ tasks, events }: CelebrationEffectsProps) {
   // ── Task-based celebrations ─────────────────────────────────────────────
 
   useEffect(() => {
+    // Don't evaluate achievements until the pipeline has had agent activity this session.
+    // This prevents badges from firing on page load when tasks from a previous run exist.
+    if (!hasSeenAgentActivity.current) return;
+
     const resolvedCount = tasks.filter(
       (t) => t.status === TASK_STATUSES.RESOLVED,
     ).length;
@@ -283,6 +289,11 @@ export function CelebrationEffects({ tasks, events }: CelebrationEffectsProps) {
     prevEventsLen.current = events.length;
 
     for (const evt of newEvents) {
+      // Track agent activity so task-based celebrations only fire during active runs
+      if (evt.type === SESSION_EVENT_TYPES.AGENT_END) {
+        hasSeenAgentActivity.current = true;
+      }
+
       // Pipeline converged — only celebrate if we ran at least one full cycle
       if (
         evt.type === SESSION_EVENT_TYPES.PIPELINE_STATE_CHANGE

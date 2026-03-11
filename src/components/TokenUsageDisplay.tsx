@@ -42,6 +42,35 @@ const AGENT_ORDER: string[] = [
   AGENT_ROLES.CODE_SIMPLIFIER,
 ];
 
+// Pipeline phases for tab-based navigation
+const PHASES = [
+  { id: "all", label: "All", roles: null },
+  { id: "research", label: "Research", roles: [AGENT_ROLES.RESEARCHER] },
+  { id: "explore", label: "Explore", roles: [AGENT_ROLES.EXPLORER] },
+  { id: "analyze", label: "Analyze", roles: [AGENT_ROLES.ANALYST, AGENT_ROLES.ANALYST_UI, AGENT_ROLES.ANALYST_BACKEND, AGENT_ROLES.ANALYST_DATABASE, AGENT_ROLES.ANALYST_DOCS] },
+  { id: "fix", label: "Fix", roles: [AGENT_ROLES.FIXER, AGENT_ROLES.FIXER_UI, AGENT_ROLES.FIXER_BACKEND, AGENT_ROLES.FIXER_DATABASE, AGENT_ROLES.FIXER_DOCS] },
+  { id: "merge", label: "Merge", roles: [AGENT_ROLES.CONSOLIDATOR] },
+  { id: "simplify", label: "Simplify", roles: [AGENT_ROLES.CODE_SIMPLIFIER] },
+  { id: "ux", label: "UX", roles: [AGENT_ROLES.UX_REVIEWER] },
+] as const;
+
+// In "All" view, domain agents are rolled up into their parent role
+const ROLLUP_GROUPS: Record<string, string[]> = {
+  [AGENT_ROLES.ANALYST]: [AGENT_ROLES.ANALYST, AGENT_ROLES.ANALYST_UI, AGENT_ROLES.ANALYST_BACKEND, AGENT_ROLES.ANALYST_DATABASE, AGENT_ROLES.ANALYST_DOCS],
+  [AGENT_ROLES.FIXER]: [AGENT_ROLES.FIXER, AGENT_ROLES.FIXER_UI, AGENT_ROLES.FIXER_BACKEND, AGENT_ROLES.FIXER_DATABASE, AGENT_ROLES.FIXER_DOCS],
+};
+
+// Roles shown in "All" view (domain variants rolled into parent)
+const ALL_VIEW_ROLES: string[] = [
+  AGENT_ROLES.RESEARCHER,
+  AGENT_ROLES.EXPLORER,
+  AGENT_ROLES.ANALYST,
+  AGENT_ROLES.FIXER,
+  AGENT_ROLES.CONSOLIDATOR,
+  AGENT_ROLES.CODE_SIMPLIFIER,
+  AGENT_ROLES.UX_REVIEWER,
+];
+
 // ─── Full metrics shape ──────────────────────────────────────────────────────
 
 interface FullMetrics {
@@ -640,6 +669,7 @@ export function TokenUsageDisplay({
   isCompacting,
 }: TokenUsageDisplayProps) {
   const [metrics, setMetrics] = useState<FullMetrics>({});
+  const [activePhase, setActivePhase] = useState("all");
   const [prevTotals, setPrevTotals] = useState<Record<string, number>>({});
   const [prevMetrics, setPrevMetrics] = useState<{
     buildsPass: number;
@@ -788,26 +818,101 @@ export function TokenUsageDisplay({
       </AnimatePresence>
 
       <div className="relative flex items-center gap-4 px-4 py-2.5">
-        {/* ── Token Section ── */}
-        <div className="flex items-center gap-4 flex-1 min-w-0 overflow-hidden">
-          {/* Agent bars — only show agents with activity */}
+        {/* ── Token Section with Phase Tabs ── */}
+        <div className="flex flex-col gap-1.5 flex-1 min-w-0 overflow-hidden">
+          {/* Phase tabs */}
+          <div className="flex items-center gap-1">
+            {PHASES.filter((phase) => {
+              // Only show a phase tab if it has activity or is "all"
+              if (!phase.roles) return true;
+              return phase.roles.some((r) => {
+                const inp = metrics.agentInputTokens?.[r] ?? 0;
+                const out = metrics.agentOutputTokens?.[r] ?? 0;
+                return inp + out > 0;
+              });
+            }).map((phase) => {
+              const isActive = activePhase === phase.id;
+              // Get phase color from the first role's visuals
+              const phaseColor = phase.roles ? getTokenMeta(phase.roles[0]).color : "#00E5FF";
+              return (
+                <button
+                  key={phase.id}
+                  onClick={() => setActivePhase(phase.id)}
+                  className="rounded px-2 py-0.5 text-[8px] font-semibold uppercase tracking-widest transition-colors"
+                  style={{
+                    color: isActive ? phaseColor : "var(--color-text-muted)",
+                    background: isActive ? `${phaseColor}15` : "transparent",
+                    borderBottom: isActive ? `1px solid ${phaseColor}` : "1px solid transparent",
+                  }}
+                >
+                  {phase.label}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Agent bars */}
           <div className="flex flex-1 items-stretch gap-3 min-w-0 overflow-x-auto">
-            {AGENT_ORDER.filter((role) => {
-              const inp = metrics.agentInputTokens?.[role] ?? 0;
-              const out = metrics.agentOutputTokens?.[role] ?? 0;
-              return inp + out > 0 || activeAgent === role;
-            }).map((role) => (
-              <AgentBar
-                key={role}
-                role={role}
-                inputTokens={metrics.agentInputTokens?.[role] ?? 0}
-                outputTokens={metrics.agentOutputTokens?.[role] ?? 0}
-                maxTokens={agentMax}
-                isActive={activeAgent === role}
-                prevTotal={prevTotals[role] ?? 0}
-                isCompacting={isCompacting}
-              />
-            ))}
+            {(() => {
+              const phase = PHASES.find((p) => p.id === activePhase);
+              const inp = metrics.agentInputTokens ?? {};
+              const out = metrics.agentOutputTokens ?? {};
+
+              if (activePhase === "all") {
+                // Rolled-up view: show parent roles with summed tokens from children
+                return ALL_VIEW_ROLES.filter((role) => {
+                  const group = ROLLUP_GROUPS[role];
+                  if (group) {
+                    return group.some((r) => (inp[r] ?? 0) + (out[r] ?? 0) > 0);
+                  }
+                  return (inp[role] ?? 0) + (out[role] ?? 0) > 0 || activeAgent === role;
+                }).map((role) => {
+                  const group = ROLLUP_GROUPS[role];
+                  let inputTokens = inp[role] ?? 0;
+                  let outputTokens = out[role] ?? 0;
+                  let prevTotal = prevTotals[role] ?? 0;
+                  const isGroupActive = group
+                    ? group.some((r) => activeAgent === r)
+                    : activeAgent === role;
+
+                  if (group) {
+                    inputTokens = group.reduce((s, r) => s + (inp[r] ?? 0), 0);
+                    outputTokens = group.reduce((s, r) => s + (out[r] ?? 0), 0);
+                    prevTotal = group.reduce((s, r) => s + (prevTotals[r] ?? 0), 0);
+                  }
+
+                  return (
+                    <AgentBar
+                      key={role}
+                      role={role}
+                      inputTokens={inputTokens}
+                      outputTokens={outputTokens}
+                      maxTokens={agentMax}
+                      isActive={isGroupActive}
+                      prevTotal={prevTotal}
+                      isCompacting={isCompacting}
+                    />
+                  );
+                });
+              }
+
+              // Phase-specific view: show individual agents in this phase
+              const roles = phase?.roles ?? AGENT_ORDER;
+              return roles.filter((role) => {
+                return (inp[role] ?? 0) + (out[role] ?? 0) > 0 || activeAgent === role;
+              }).map((role) => (
+                <AgentBar
+                  key={role}
+                  role={role}
+                  inputTokens={inp[role] ?? 0}
+                  outputTokens={out[role] ?? 0}
+                  maxTokens={agentMax}
+                  isActive={activeAgent === role}
+                  prevTotal={prevTotals[role] ?? 0}
+                  isCompacting={isCompacting}
+                />
+              ));
+            })()}
             {/* Empty state when no agents have activity */}
             {!hasAnyActivity && (
               <div className="flex items-center gap-2 py-1 text-text-muted/50">
@@ -815,18 +920,18 @@ export function TokenUsageDisplay({
               </div>
             )}
           </div>
+        </div>
 
-          {/* Total tokens badge */}
-          <div className="flex flex-col items-center gap-0.5 shrink-0">
-            <SpringNumber
-              value={totalTokens}
-              color={totalTokens > 0 ? "#00E5FF" : "var(--color-text-muted)"}
-              className="font-mono text-sm font-bold tabular-nums"
-            />
-            <span className="text-[7px] uppercase tracking-[0.15em] text-text-muted">
-              Tokens
-            </span>
-          </div>
+        {/* Total tokens badge */}
+        <div className="flex flex-col items-center gap-0.5 shrink-0">
+          <SpringNumber
+            value={totalTokens}
+            color={totalTokens > 0 ? "#00E5FF" : "var(--color-text-muted)"}
+            className="font-mono text-sm font-bold tabular-nums"
+          />
+          <span className="text-[7px] uppercase tracking-[0.15em] text-text-muted">
+            Tokens
+          </span>
         </div>
 
         {/* ── Divider ── */}

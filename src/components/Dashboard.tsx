@@ -58,6 +58,7 @@ const INITIAL_STATE: PipelineState = {
   activeAgent: null,
   activeAgents: [],
   activeDomains: [],
+  completedAgents: [],
   runId: null,
   tasksSummary: { total: 0, open: 0, inProgress: 0, resolved: 0, deferred: 0 },
 };
@@ -156,6 +157,13 @@ export function Dashboard({ config }: DashboardProps) {
           const state = evt.data.state as PipelineState | undefined;
           if (state) {
             setPipelineState(state);
+            // Sync completedAgents from server state (survives browser refresh)
+            if (state.completedAgents?.length) {
+              setCompletedAgents((prev) => {
+                const merged = new Set([...prev, ...state.completedAgents]);
+                return merged.size !== prev.length ? [...merged] : prev;
+              });
+            }
             // Clear the "starting" action once the pipeline confirms RUNNING
             if (state.status === PIPELINE_STATUSES.RUNNING) {
               setPipelineAction(null);
@@ -398,14 +406,14 @@ export function Dashboard({ config }: DashboardProps) {
   const isRunning = pipelineState.status === PIPELINE_STATUSES.RUNNING;
   const canStart = !isRunning && pipelineAction !== "starting";
 
-  const startPipeline = useCallback(async () => {
+  const startPipeline = useCallback(async (options?: { resume?: boolean }) => {
     setPipelineAction("starting");
     setCompletedAgents([]);
     try {
       const res = await fetch("/api/pipeline/start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(currentConfig),
+        body: JSON.stringify({ ...currentConfig, resume: options?.resume }),
       });
       if (!res.ok) setPipelineAction(null);
     } catch { setPipelineAction(null); }
@@ -530,20 +538,30 @@ export function Dashboard({ config }: DashboardProps) {
             </span>
           </div>
 
-          {/* Active agent indicator */}
-          {isRunning && pipelineState.activeAgent && (() => {
-            const vis = getAgentVisual(pipelineState.activeAgent);
+          {/* Active agent indicator(s) */}
+          {isRunning && (() => {
+            const agents = (pipelineState.activeAgents?.length ?? 0) > 0
+              ? pipelineState.activeAgents!
+              : pipelineState.activeAgent ? [pipelineState.activeAgent] : [];
+            if (agents.length === 0) return null;
             return (
-              <div className="flex items-center gap-1.5">
-                <motion.span
-                  animate={{ opacity: [0.4, 1, 0.4] }}
-                  transition={{ repeat: Infinity, duration: 1.5, ease: "easeInOut" }}
-                  className="h-1.5 w-1.5 rounded-full"
-                  style={{ backgroundColor: vis.hex }}
-                />
-                <span className="text-[10px] font-medium" style={{ color: vis.hex }}>
-                  {vis.label}
-                </span>
+              <div className="flex items-center gap-2 overflow-x-auto">
+                {agents.map((agent) => {
+                  const vis = getAgentVisual(agent);
+                  return (
+                    <div key={agent} className="flex items-center gap-1.5 shrink-0">
+                      <motion.span
+                        animate={{ opacity: [0.4, 1, 0.4] }}
+                        transition={{ repeat: Infinity, duration: 1.5, ease: "easeInOut" }}
+                        className="h-1.5 w-1.5 rounded-full"
+                        style={{ backgroundColor: vis.hex }}
+                      />
+                      <span className="text-[10px] font-medium" style={{ color: vis.hex }}>
+                        {vis.label}
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
             );
           })()}
@@ -583,7 +601,7 @@ export function Dashboard({ config }: DashboardProps) {
             )}
           </span>
 
-          {/* Pipeline Start / Stop / Resume / New (2026 §4 — spring physics, glow hover) */}
+          {/* Pipeline Start / Stop / Resume (2026 §4 — spring physics, glow hover) */}
           {isRunning ? (
             <motion.button
               whileHover={{ scale: 1.06, boxShadow: "0 0 20px rgba(239, 68, 68, 0.25)" }}
@@ -603,53 +621,45 @@ export function Dashboard({ config }: DashboardProps) {
                 </motion.span>
               ) : "Stop"}
             </motion.button>
-          ) : pipelineState.status === PIPELINE_STATUSES.STOPPED && pipelineState.currentCycle > 0 ? (
-            /* Stopped with history — show Resume + New Run */
+          ) : (
             <div className="flex items-center gap-1.5">
+              {/* Resume — show when there are incomplete tasks to work on */}
+              {(pipelineState.tasksSummary.open > 0 || pipelineState.tasksSummary.inProgress > 0) && (
+                <motion.button
+                  whileHover={{ scale: 1.06, boxShadow: "0 0 20px rgba(0, 229, 255, 0.25)" }}
+                  whileTap={{ scale: 0.92 }}
+                  transition={{ type: "spring", stiffness: 400, damping: 17 }}
+                  onClick={() => startPipeline({ resume: true })}
+                  disabled={pipelineAction === "starting"}
+                  className="flex items-center gap-1.5 rounded-full border border-accent/20 bg-accent/10 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-widest text-accent transition-colors hover:bg-accent/20 disabled:opacity-40"
+                  aria-label="Resume pipeline"
+                >
+                  <svg className="h-3 w-3" viewBox="0 0 24 24" fill="currentColor">
+                    <polygon points="6,4 20,12 6,20" />
+                  </svg>
+                  Resume
+                </motion.button>
+              )}
+              {/* Start New */}
               <motion.button
-                whileHover={{ scale: 1.06, boxShadow: "0 0 20px rgba(0, 229, 255, 0.25)" }}
+                whileHover={{ scale: 1.06, boxShadow: "0 0 20px rgba(0, 255, 163, 0.25)" }}
                 whileTap={{ scale: 0.92 }}
                 transition={{ type: "spring", stiffness: 400, damping: 17 }}
-                onClick={startPipeline}
-                disabled={pipelineAction === "starting"}
-                className="flex items-center gap-1.5 rounded-full border border-accent/20 bg-accent/10 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-widest text-accent transition-colors hover:bg-accent/20 disabled:opacity-40"
-                aria-label="Resume pipeline"
+                onClick={() => startPipeline()}
+                disabled={!canStart}
+                className="flex items-center gap-1.5 rounded-full border border-status-live/20 bg-status-live/10 px-3.5 py-1.5 text-[10px] font-semibold uppercase tracking-widest text-status-live transition-colors hover:bg-status-live/20 disabled:opacity-40"
+                aria-label="Start new pipeline"
               >
                 <svg className="h-3 w-3" viewBox="0 0 24 24" fill="currentColor">
                   <polygon points="6,4 20,12 6,20" />
                 </svg>
-                Resume
-              </motion.button>
-              <motion.button
-                whileHover={{ scale: 1.06 }}
-                whileTap={{ scale: 0.92 }}
-                transition={{ type: "spring", stiffness: 400, damping: 17 }}
-                onClick={() => { resetPipeline(); }}
-                className="rounded-full border border-border-active bg-white/[0.03] px-3 py-1.5 text-[10px] font-semibold uppercase tracking-widest text-text-secondary transition-colors hover:bg-white/[0.06] hover:text-text-primary"
-                aria-label="New run"
-              >
-                New
+                {pipelineAction === "starting" ? (
+                  <motion.span animate={{ opacity: [0.5, 1, 0.5] }} transition={{ repeat: Infinity, duration: 1 }}>
+                    Starting…
+                  </motion.span>
+                ) : "Start New"}
               </motion.button>
             </div>
-          ) : (
-            <motion.button
-              whileHover={{ scale: 1.06, boxShadow: "0 0 20px rgba(0, 255, 163, 0.25)" }}
-              whileTap={{ scale: 0.92 }}
-              transition={{ type: "spring", stiffness: 400, damping: 17 }}
-              onClick={startPipeline}
-              disabled={!canStart}
-              className="flex items-center gap-1.5 rounded-full border border-status-live/20 bg-status-live/10 px-3.5 py-1.5 text-[10px] font-semibold uppercase tracking-widest text-status-live transition-colors hover:bg-status-live/20 disabled:opacity-40"
-              aria-label="Start pipeline"
-            >
-              <svg className="h-3 w-3" viewBox="0 0 24 24" fill="currentColor">
-                <polygon points="6,4 20,12 6,20" />
-              </svg>
-              {pipelineAction === "starting" ? (
-                <motion.span animate={{ opacity: [0.5, 1, 0.5] }} transition={{ repeat: Infinity, duration: 1 }}>
-                  Starting…
-                </motion.span>
-              ) : "Start"}
-            </motion.button>
           )}
 
           {/* Git (2026 §5 — glassmorphic icon button) */}
@@ -739,9 +749,9 @@ export function Dashboard({ config }: DashboardProps) {
                 aria-selected={activeTab === tab}
                 aria-controls="sidebar-tabpanel"
                 onClick={() => setActiveTab(tab)}
-                className={`flex-1 py-2.5 text-center text-[10px] uppercase tracking-widest transition-colors ${
+                className={`relative flex-1 py-2.5 text-center text-[10px] uppercase tracking-widest transition-colors ${
                   activeTab === tab
-                    ? "border-b-2 border-accent text-accent"
+                    ? "text-accent"
                     : "text-text-muted hover:text-text-secondary"
                 }`}
               >
@@ -750,6 +760,13 @@ export function Dashboard({ config }: DashboardProps) {
                   <span className="ml-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-accent/10 px-1 font-mono text-[9px] text-accent">
                     {tasks.length}
                   </span>
+                )}
+                {activeTab === tab && (
+                  <motion.div
+                    layoutId="sidebar-tab-indicator"
+                    className="absolute bottom-0 left-0 right-0 h-[2px] bg-accent"
+                    transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                  />
                 )}
               </button>
             ))}
@@ -763,6 +780,7 @@ export function Dashboard({ config }: DashboardProps) {
                   tasks={tasks}
                   onSelectTask={setSelectedTask}
                   onRefreshTasks={fetchTasks}
+                  isRunning={isRunning}
                 />
               )}
               {activeTab === "ux" && <UxScorecard tasks={tasks} />}
@@ -805,7 +823,7 @@ export function Dashboard({ config }: DashboardProps) {
             agent={selectedAgent}
             entries={streamEntries.filter((e) => e.agent === selectedAgent)}
             isActive={(pipelineState.activeAgents ?? []).includes(selectedAgent) || pipelineState.activeAgent === selectedAgent}
-            isCompleted={false}
+            isCompleted={completedAgents.includes(selectedAgent)}
             onClose={() => setSelectedAgent(null)}
           />
         )}
