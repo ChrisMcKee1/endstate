@@ -1,3 +1,4 @@
+// @ts-nocheck
 // Asset: Account Quota Checking
 // Monitor API usage limits to prevent unexpected throttling.
 // Reference: references/api-surface.md → client.rpc.account

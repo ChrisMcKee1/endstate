@@ -6,12 +6,11 @@ import {
   getTasksByStatus,
   getTasksBySeverity,
   createTask,
-  deleteTask,
   deleteTasks,
   patchTask,
 } from "@/lib/pipeline/task-store";
 import type { TaskStatus, Severity } from "@/lib/types";
-import { TASK_STATUSES, SEVERITIES, AGENT_ROLES, TASK_ACTIONS } from "@/lib/types";
+import { TASK_STATUSES, SEVERITIES, AGENT_ROLES } from "@/lib/types";
 import { withApiTiming } from "@/lib/otel/metrics";
 
 const VALID_STATUSES = new Set(Object.values(TASK_STATUSES));

@@ -33,6 +33,7 @@ import type {
   AgentRole,
   AgentGraphNode,
   SSEEvent,
+  Task,
 } from "@/lib/types";
 import {
   AGENT_ROLES,
@@ -72,8 +73,24 @@ let currentState: PipelineState = {
 };
 
 let abortController: AbortController | null = null;
-let activeSessions = new Map<AgentRole, { abort: () => Promise<void>; destroy: () => Promise<void> }>();
+const activeSessions = new Map<AgentRole, { abort: () => Promise<void>; destroy: () => Promise<void> }>();
 let activeConfig: PipelineConfig | null = null;
+
+// Accumulated agent output history: each agent's final response is captured
+// and persisted across cycles. Downstream agents receive relevant upstream
+// context, and the full history grows so subsequent cycles know what happened
+// in previous runs. Cleared only on fresh pipeline starts (not between cycles).
+interface AgentOutput {
+  role: AgentRole;
+  cycle: number;
+  summary: string;
+  timestamp: string;
+}
+let agentOutputHistory: AgentOutput[] = [];
+
+// Worktree merge results: populated before the Consolidator runs so its
+// prompt includes which domains merged successfully and which had conflicts.
+let lastWorktreeMergeResults: { domain: string; merged: boolean; conflicts: boolean }[] = [];
 
 // ─── SSE broadcasting ────────────────────────────────────────────────────────
 
@@ -157,6 +174,167 @@ function isAgentEnabled(role: AgentRole, config: PipelineConfig): boolean {
   }
 }
 
+// ─── Agent output history & upstream context ──────────────────────────────────
+
+/** Get all transitive predecessors of a role in the agent graph.
+ *  These are the agents whose work THIS agent can see (they completed before it). */
+function getTransitivePredecessors(
+  role: AgentRole,
+  graph: AgentGraphNode[],
+): Set<AgentRole> {
+  const predecessors = new Set<AgentRole>();
+  const nodeMap = new Map(graph.map((n) => [n.role, n]));
+  const queue: AgentRole[] = [];
+
+  // Start from this node's runAfter dependencies
+  const node = nodeMap.get(role);
+  if (node) {
+    for (const dep of node.runAfter) queue.push(dep);
+  }
+
+  while (queue.length > 0) {
+    const current = queue.shift()!;
+    if (predecessors.has(current)) continue;
+    predecessors.add(current);
+    const currentNode = nodeMap.get(current);
+    if (currentNode) {
+      for (const dep of currentNode.runAfter) queue.push(dep);
+    }
+  }
+  return predecessors;
+}
+
+/** Build upstream context for an agent. Returns a markdown section showing
+ *  what previous agents have done, respecting DAG ordering:
+ *  - ALL outputs from previous cycles (full pipeline history)
+ *  - Current cycle outputs only from transitive predecessors (per DAG)
+ *  Truncates individual summaries to keep prompts manageable. */
+function buildUpstreamContext(
+  role: AgentRole,
+  cycle: number,
+  graph: AgentGraphNode[],
+): string {
+  // Researcher is the entry point — no upstream context
+  if (role === AGENT_ROLES.RESEARCHER) return "";
+
+  const predecessors = getTransitivePredecessors(role, graph);
+
+  // Previous cycles: all agents' outputs (full history)
+  const previousCycleOutputs = agentOutputHistory.filter((o) => o.cycle < cycle);
+
+  // Current cycle: only predecessors in the DAG (they must have completed before us)
+  const currentCycleOutputs = agentOutputHistory.filter(
+    (o) => o.cycle === cycle && predecessors.has(o.role),
+  );
+
+  const allRelevant = [...previousCycleOutputs, ...currentCycleOutputs];
+  if (allRelevant.length === 0) return "";
+
+  // Group by cycle for readability
+  const byCycle = new Map<number, AgentOutput[]>();
+  for (const output of allRelevant) {
+    const list = byCycle.get(output.cycle) ?? [];
+    list.push(output);
+    byCycle.set(output.cycle, list);
+  }
+
+  const sections: string[] = [];
+  sections.push("## PIPELINE WORK HISTORY\n\nThe following is a summary of work completed by all agents that ran before you. Use this to understand what has been done, what was fixed, and what gaps remain.\n");
+
+  for (const [cycleNum, outputs] of [...byCycle.entries()].sort((a, b) => a[0] - b[0])) {
+    const label = cycleNum === 0 ? "Initial Research" : `Cycle ${cycleNum}`;
+    const agentSections = outputs.map((o) => {
+      // Truncate to keep prompts manageable — 3KB per agent output
+      const truncated = o.summary.length > 3000
+        ? o.summary.slice(0, 3000) + "\n\n[... truncated ...]"
+        : o.summary;
+      return `#### ${o.role}\n${truncated}`;
+    });
+    sections.push(`### ${label}\n\n${agentSections.join("\n\n---\n\n")}`);
+  }
+
+  return sections.join("\n\n");
+}
+
+/** Build a rich prompt for the Consolidator that includes all upstream agent
+ *  outputs, worktree merge results, and full task details with timelines. */
+function buildConsolidatorPrompt(
+  cycle: number,
+  tasks: Task[],
+  config: PipelineConfig,
+  graph: AgentGraphNode[],
+): string {
+  const sections: string[] = [];
+
+  sections.push(`Cycle ${cycle}. You are the Consolidator — the fan-in merge point after all domain-scoped analysts and fixers have completed their work.\n`);
+
+  // ── Section 1: Full upstream context (all previous cycles + current cycle predecessors) ──
+  const upstreamContext = buildUpstreamContext(AGENT_ROLES.CONSOLIDATOR, cycle, graph);
+  if (upstreamContext) {
+    sections.push(upstreamContext);
+  }
+
+  // ── Section 2: Worktree merge results (if worktree isolation is enabled) ──
+  if (config.enableWorktreeIsolation) {
+    if (lastWorktreeMergeResults.length > 0) {
+      const mergeLines = lastWorktreeMergeResults.map((r) => {
+        if (r.conflicts) return `- **${r.domain}**: ⚠️ MERGED WITH CONFLICTS — manual resolution may be needed`;
+        if (r.merged) return `- **${r.domain}**: ✅ Merged successfully`;
+        return `- **${r.domain}**: ∅ No changes to merge`;
+      });
+      sections.push(
+        `## WORKTREE MERGE STATUS\n\nWorktree isolation was enabled. The orchestrator has already merged each domain fixer's worktree branch into the main branch. Results:\n\n${mergeLines.join("\n")}\n\nYou do NOT need to run \`git worktree\` or \`git merge\` commands — that's already done. Focus on verifying the combined result, resolving any remaining conflicts, and fixing cross-domain issues.`,
+      );
+    } else {
+      sections.push(
+        "## WORKTREE MERGE STATUS\n\nWorktree isolation was enabled but no worktree merge results were recorded. The fixers may not have created any worktrees this cycle.",
+      );
+    }
+  } else {
+    sections.push(
+      "## WORKTREE STATUS\n\nWorktree isolation is NOT enabled. All fixers worked on the same directory. Check `git diff` to review the combined changes and look for logical conflicts — two fixers editing the same file or making incompatible assumptions.",
+    );
+  }
+
+  // ── Section 3: Full task details with timelines for this cycle ──
+  const tasksWithCycleActivity = tasks.filter((t) =>
+    t.timeline.some((e) => e.cycle === cycle),
+  );
+
+  const taskDetails = tasksWithCycleActivity.map((t) => {
+    const cycleEvents = t.timeline.filter((e) => e.cycle === cycle);
+    const eventSummaries = cycleEvents.map(
+      (e) =>
+        `  - [${e.agent}] ${e.action}: ${e.detail}${e.buildResult ? ` (build: ${e.buildResult})` : ""}${e.diff ? `\n    Diff: ${e.diff.slice(0, 500)}` : ""}`,
+    );
+    return `### ${t.id}: ${t.title}\n- Severity: ${t.severity} | Status: ${t.status} | Component: ${t.component}\n- Domains: ${t.domains?.join(", ") || "unassigned"}\n- Files: ${t.files.join(", ") || "none"}\n- Cycle ${cycle} activity:\n${eventSummaries.join("\n")}`;
+  });
+
+  if (taskDetails.length > 0) {
+    sections.push(
+      `## TASKS WITH ACTIVITY THIS CYCLE\n\n${taskDetails.join("\n\n")}`,
+    );
+  }
+
+  // ── Section 4: All tasks summary (including those without cycle activity) ──
+  const allTasksSummary = JSON.stringify(
+    tasks.map((t) => ({
+      id: t.id,
+      title: t.title,
+      severity: t.severity,
+      status: t.status,
+      component: t.component,
+      domains: t.domains,
+      timelineCount: t.timeline.length,
+    })),
+    null,
+    2,
+  );
+  sections.push(`## ALL TASKS\n\n${allTasksSummary}`);
+
+  return sections.join("\n\n---\n\n");
+}
+
 // ─── Agent execution ──────────────────────────────────────────────────────────
 
 async function runAgent(
@@ -164,6 +342,7 @@ async function runAgent(
   config: PipelineConfig,
   cycle: number,
   signal: AbortSignal,
+  graph: AgentGraphNode[],
   overrides?: { workingDirectory?: string },
 ): Promise<void> {
   if (signal.aborted) return;
@@ -230,8 +409,19 @@ async function runAgent(
       prompt = `Cycle ${cycle}. Review and diagnose all tasks. After your analysis, state whether to CONTINUE or STOP.\n\nCurrent tasks:\n${taskSummary}`;
     } else if (role === AGENT_ROLES.CODE_SIMPLIFIER) {
       prompt = `Cycle ${cycle}. Review all code changes made this cycle. Simplify where possible.\n\nCurrent tasks:\n${taskSummary}`;
+    } else if (role === AGENT_ROLES.CONSOLIDATOR) {
+      prompt = buildConsolidatorPrompt(cycle, tasks, config, graph);
     } else {
       prompt = `Cycle ${cycle}. Current tasks:\n${taskSummary}`;
+    }
+
+    // Append upstream agent work history to all non-Researcher, non-Consolidator prompts.
+    // (Consolidator gets its own richer format via buildConsolidatorPrompt.)
+    if (role !== AGENT_ROLES.RESEARCHER && role !== AGENT_ROLES.CONSOLIDATOR) {
+      const upstreamContext = buildUpstreamContext(role, cycle, graph);
+      if (upstreamContext) {
+        prompt += `\n\n---\n\n${upstreamContext}`;
+      }
     }
 
     // Forward session events to SSE and capture token usage
@@ -308,6 +498,19 @@ async function runAgent(
       recordAgentTurn(role);
       recordAgentLatency(role, elapsed);
       endSpanOk(turnSpan);
+
+      // Store the agent's full final response for downstream agents.
+      // This accumulates across cycles so all agents can see the full
+      // history of work done by the pipeline.
+      const fullResponse = (response?.data?.content as string) ?? accumulatedText;
+      if (fullResponse) {
+        agentOutputHistory.push({
+          role,
+          cycle,
+          summary: fullResponse,
+          timestamp: new Date().toISOString(),
+        });
+      }
 
       broadcast({
         type: SESSION_EVENT_TYPES.AGENT_END,
@@ -412,6 +615,7 @@ async function executeLayer(
   config: PipelineConfig,
   cycle: number,
   signal: AbortSignal,
+  graph: AgentGraphNode[],
 ): Promise<void> {
   // When worktree isolation is enabled, fixers can run in parallel
   // because each gets its own isolated worktree directory.
@@ -453,14 +657,14 @@ async function executeLayer(
           }
         }
 
-        await runAgent(node.role, config, cycle, signal, overrides);
+        await runAgent(node.role, config, cycle, signal, graph, overrides);
         refreshTasksSummary();
       }),
     );
   } else if (parallel.length === 1) {
     if (!signal.aborted && currentState.status !== PIPELINE_STATUSES.STOPPED) {
       if (isAgentEnabled(parallel[0].role, config)) {
-        await runAgent(parallel[0].role, config, cycle, signal);
+        await runAgent(parallel[0].role, config, cycle, signal, graph);
         refreshTasksSummary();
       }
     }
@@ -474,9 +678,11 @@ async function executeLayer(
     // Consolidator: merge all worktrees before running
     if (useWorktrees && node.role === AGENT_ROLES.CONSOLIDATOR) {
       const domains = ["ui", "backend", "database", "docs"] as const;
+      const mergeResults: typeof lastWorktreeMergeResults = [];
       for (const domain of domains) {
         try {
           const result = await mergeWorktree(config.projectPath, domain);
+          mergeResults.push({ domain, ...result });
           if (result.conflicts) {
             broadcast({
               type: SESSION_EVENT_TYPES.SESSION_ERROR,
@@ -487,11 +693,13 @@ async function executeLayer(
           }
         } catch {
           // Worktree may not exist if that domain was disabled
+          mergeResults.push({ domain, merged: false, conflicts: false });
         }
       }
+      lastWorktreeMergeResults = mergeResults;
     }
 
-    await runAgent(node.role, config, cycle, signal);
+    await runAgent(node.role, config, cycle, signal, graph);
     refreshTasksSummary();
   }
 }
@@ -519,7 +727,7 @@ async function executeGraph(
     const ready = getReadyNodes(graph, completed);
     if (ready.length === 0) break; // No progress possible — avoid infinite loop
 
-    await executeLayer(ready, config, cycle, signal);
+    await executeLayer(ready, config, cycle, signal, graph);
 
     // Mark all ready nodes as completed (including disabled ones)
     for (const node of ready) {
@@ -577,6 +785,9 @@ async function runPipeline(config: PipelineConfig): Promise<void> {
 
     const cycleSpan = startPipelineCycleSpan(cycle, getTaskCount());
 
+    // Clear per-cycle worktree merge results (agent outputs accumulate across cycles)
+    lastWorktreeMergeResults = [];
+
     broadcast({
       type: SESSION_EVENT_TYPES.PIPELINE_CYCLE_START,
       timestamp: new Date().toISOString(),
@@ -630,6 +841,7 @@ export function startPipeline(config: PipelineConfig, options?: { resume?: boole
     clearAllTasks();
     clearCheatSheet(config.projectPath);
     clearAwards();
+    agentOutputHistory = [];
   }
   // Resume: keep existing tasks, cheat sheet, and awards
 

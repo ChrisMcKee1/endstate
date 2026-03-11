@@ -87,6 +87,7 @@ interface McpStdioConfig {
   type: "local" | "stdio";
   command: string;
   args: string[];
+  cwd?: string;
   env?: Record<string, string>;
   tools: string[];
 }

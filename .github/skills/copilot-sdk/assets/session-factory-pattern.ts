@@ -1,3 +1,4 @@
+// @ts-nocheck
 // Asset: Session Factory Pattern
 // Shows how Endstate creates isolated Copilot SDK sessions per agent role.
 // See: src/lib/copilot/agents.ts

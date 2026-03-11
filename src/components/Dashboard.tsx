@@ -30,6 +30,8 @@ import { TokenUsageDisplay } from "@/components/TokenUsageDisplay";
 import { AwardsPanel } from "@/components/AwardsPanel";
 import { ProjectKnowledge } from "@/components/ProjectKnowledge";
 import { getAgentVisual } from "@/lib/agent-visuals";
+import { VisionPanel } from "@/components/VisionPanel";
+import { StartNewModal } from "@/components/StartNewModal";
 
 // ─── Stream entry type (UI-only) ──────────────────────────────────────────────
 
@@ -63,7 +65,7 @@ const INITIAL_STATE: PipelineState = {
   tasksSummary: { total: 0, open: 0, inProgress: 0, resolved: 0, deferred: 0 },
 };
 
-const SIDEBAR_TABS = ["knowledge", "tasks", "ux", "metrics", "awards"] as const;
+const SIDEBAR_TABS = ["knowledge", "tasks", "ux", "metrics", "awards", "vision"] as const;
 type SidebarTab = (typeof SIDEBAR_TABS)[number];
 
 const TAB_LABELS: Record<SidebarTab, string> = {
@@ -72,6 +74,7 @@ const TAB_LABELS: Record<SidebarTab, string> = {
   ux: "UX",
   metrics: "Metrics",
   awards: "Awards",
+  vision: "Vision",
 };
 
 const STATUS_COLORS: Record<string, string> = {
@@ -109,6 +112,7 @@ export function Dashboard({ config }: DashboardProps) {
   const [gitOpen, setGitOpen] = useState(false);
   const [pipelineAction, setPipelineAction] = useState<"starting" | "stopping" | null>(null);
   const [showNewProjectConfirm, setShowNewProjectConfirm] = useState(false);
+  const [showStartNewModal, setShowStartNewModal] = useState(false);
   const [selectedAgent, setSelectedAgent] = useState<AgentRole | null>(null);
   const [completedAgents, setCompletedAgents] = useState<AgentRole[]>([]);
 
@@ -459,7 +463,8 @@ export function Dashboard({ config }: DashboardProps) {
     finally { setPipelineAction(null); }
   }, []);
 
-  const resetPipeline = useCallback(() => {
+  // Reset helper for future use (e.g. starting a new pipeline)
+  const _resetPipeline = useCallback(() => {
     setStreamEntries([]);
     entryCounter.current = 0;
     activeMessageId.current = null;
@@ -527,6 +532,18 @@ export function Dashboard({ config }: DashboardProps) {
       if (!res.ok) setPipelineAction(null);
     } catch { setPipelineAction(null); }
     // On success, pipelineAction is cleared when SSE confirms RUNNING state
+  }, [currentConfig]);
+
+  const handleUpdateVision = useCallback(async (vision: string) => {
+    const updatedConfig = { ...currentConfig, inspiration: vision };
+    setCurrentConfig(updatedConfig);
+    try {
+      await fetch("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updatedConfig),
+      });
+    } catch { /* best effort */ }
   }, [currentConfig]);
 
   return (
@@ -667,7 +684,7 @@ export function Dashboard({ config }: DashboardProps) {
                 whileHover={{ scale: 1.06, boxShadow: "0 0 20px rgba(0, 255, 163, 0.25)" }}
                 whileTap={{ scale: 0.92 }}
                 transition={{ type: "spring", stiffness: 400, damping: 17 }}
-                onClick={() => startPipeline()}
+                onClick={() => setShowStartNewModal(true)}
                 disabled={!canStart}
                 className="flex items-center gap-1.5 rounded-full border border-status-live/20 bg-status-live/10 px-3.5 py-1.5 text-[10px] font-semibold uppercase tracking-widest text-status-live transition-colors hover:bg-status-live/20 disabled:opacity-40"
                 aria-label="Start new pipeline"
@@ -819,6 +836,13 @@ export function Dashboard({ config }: DashboardProps) {
                   isRunning={isRunning}
                 />
               )}
+              {activeTab === "vision" && (
+                <VisionPanel
+                  inspiration={currentConfig.inspiration}
+                  onUpdate={handleUpdateVision}
+                  isRunning={isRunning}
+                />
+              )}
             </ErrorBoundary>
           </div>
         </div>
@@ -932,6 +956,24 @@ export function Dashboard({ config }: DashboardProps) {
               </div>
             </motion.div>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Start New Modal ────────────────────────────────────────────── */}
+      <AnimatePresence>
+        {showStartNewModal && (
+          <StartNewModal
+            tasks={tasks}
+            onResume={() => {
+              setShowStartNewModal(false);
+              startPipeline({ resume: true });
+            }}
+            onNewVision={(vision) => {
+              setShowStartNewModal(false);
+              handleNewVision(vision);
+            }}
+            onClose={() => setShowStartNewModal(false)}
+          />
         )}
       </AnimatePresence>
 

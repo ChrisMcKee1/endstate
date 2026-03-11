@@ -1,3 +1,4 @@
+// @ts-nocheck
 // Asset: Manual Compaction Control
 // Trigger compaction proactively instead of waiting for automatic thresholds.
 // Reference: references/api-surface.md → session.rpc.compaction

@@ -1,3 +1,4 @@
+// @ts-nocheck
 // Asset: Native Token Tracking via assistant.usage Event
 // The SDK emits per-call token usage — use this instead of manual estimation.
 // Reference: references/session-events.md → assistant.usage

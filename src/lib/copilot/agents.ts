@@ -94,6 +94,7 @@ function mcpPlaywright(projectPath: string) {
     type: "local" as const,
     command: "npx",
     args: ["@playwright/mcp@latest", "--output-dir", screenshotsDir],
+    cwd: projectPath,
     tools: ["*"],
   };
 }
@@ -103,27 +104,31 @@ function mcpFilesystem(projectPath: string) {
     type: "local" as const,
     command: "npx",
     args: ["-y", "@modelcontextprotocol/server-filesystem", projectPath],
+    cwd: projectPath,
     tools: ["*"],
   };
 }
 
-const MCP_GITHUB = {
-  type: "local" as const,
-  command: "npx",
-  args: ["-y", "@modelcontextprotocol/server-github"],
-  tools: ["*"],
-};
+function mcpGithub(projectPath: string) {
+  return {
+    type: "local" as const,
+    command: "npx",
+    args: ["-y", "@modelcontextprotocol/server-github"],
+    cwd: projectPath,
+    tools: ["*"],
+  };
+}
 
 function mcpServersForRole(
   role: AgentRole,
   projectPath: string
-): Record<string, { type: "local"; command: string; args: string[]; tools: string[] }> {
+): Record<string, { type: "local"; command: string; args: string[]; cwd: string; tools: string[] }> {
   // Domain-scoped roles: analyst-* gets filesystem, fixer-* gets filesystem + github
   if (isAnalystRole(role)) {
     return { fs: mcpFilesystem(projectPath) };
   }
   if (isFixerRole(role)) {
-    return { fs: mcpFilesystem(projectPath), github: MCP_GITHUB };
+    return { fs: mcpFilesystem(projectPath), github: mcpGithub(projectPath) };
   }
 
   // Base roles and special roles
@@ -138,10 +143,10 @@ function mcpServersForRole(
 
     case AGENT_ROLES.FIXER:
     case AGENT_ROLES.CODE_SIMPLIFIER:
-      return { fs: mcpFilesystem(projectPath), github: MCP_GITHUB };
+      return { fs: mcpFilesystem(projectPath), github: mcpGithub(projectPath) };
 
     case AGENT_ROLES.CONSOLIDATOR:
-      return { fs: mcpFilesystem(projectPath), github: MCP_GITHUB, playwright: mcpPlaywright(projectPath) };
+      return { fs: mcpFilesystem(projectPath), github: mcpGithub(projectPath), playwright: mcpPlaywright(projectPath) };
 
     default:
       return { fs: mcpFilesystem(projectPath) };

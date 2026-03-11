@@ -1,3 +1,4 @@
+// @ts-nocheck
 // Asset: Session Hook Patterns
 // Shows how to use SDK hooks for instrumentation, steering, and error handling.
 // Reference: references/session-config.md → SessionHooks

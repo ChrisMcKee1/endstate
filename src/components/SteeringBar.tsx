@@ -32,7 +32,6 @@ export function SteeringBar({ status, onSteered, onNewVision }: SteeringBarProps
   const [lastSent, setLastSent] = useState<string | null>(null);
 
   const isRunning = status === PIPELINE_STATUSES.RUNNING;
-  const isIdle = !isRunning;
 
   // Auto-dismiss "Sent ✓" after 3 seconds
   useEffect(() => {

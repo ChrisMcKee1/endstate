@@ -14,7 +14,7 @@ const SEVERITY_STYLES: Record<Severity, { color: string; bg: string; glow: strin
   [SEVERITIES.LOW]: { color: "text-severity-low", bg: "bg-severity-low/15", glow: "rgba(59,130,246,0.12)" },
 };
 
-const STATUS_COLORS: Record<TaskStatus, string> = {
+const _STATUS_COLORS: Record<TaskStatus, string> = {
   [TASK_STATUSES.OPEN]: "text-text-secondary",
   [TASK_STATUSES.IN_PROGRESS]: "text-accent",
   [TASK_STATUSES.BLOCKED]: "text-severity-high",
@@ -43,7 +43,7 @@ const STATUS_ORDER: Record<TaskStatus, number> = {
   [TASK_STATUSES.WONT_FIX]: 5,
 };
 
-const DONE_STATUSES = new Set<TaskStatus>([TASK_STATUSES.RESOLVED, TASK_STATUSES.WONT_FIX]);
+const _DONE_STATUSES = new Set<TaskStatus>([TASK_STATUSES.RESOLVED, TASK_STATUSES.WONT_FIX]);
 const SKIPPED_STATUSES = new Set<TaskStatus>([TASK_STATUSES.DEFERRED, TASK_STATUSES.WONT_FIX]);
 
 const SPRING = { type: "spring" as const, stiffness: 400, damping: 30 };

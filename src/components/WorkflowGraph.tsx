@@ -472,7 +472,6 @@ export function WorkflowGraph({
         {nodes.map((node) => {
           const isCurrent = activeSet.has(node.role) && isRunning;
           const isCompleted = completedSet.has(node.role) && !isCurrent;
-          const isIdle = !isCurrent && !isCompleted;
           const isSelected = selectedAgent === node.role;
           const nodeDomain = getDomainFromRole(node.role);
           const isDomainActive = !nodeDomain || activeDomainSet.size === 0 || activeDomainSet.has(nodeDomain);

@@ -44,16 +44,20 @@ export function useTheme() {
 // ─── Provider ────────────────────────────────────────────────────────────────
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setThemeState] = useState<Theme>(THEMES.HOLOGRAPHIC);
-
-  // Load from localStorage on mount
-  useEffect(() => {
+  const [theme, setThemeState] = useState<Theme>(() => {
+    // Can't access localStorage during SSR — default to holographic
+    if (typeof window === "undefined") return THEMES.HOLOGRAPHIC;
     const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored && ALL_THEMES.includes(stored as Theme)) {
-      setThemeState(stored as Theme);
-      document.documentElement.setAttribute("data-theme", stored);
+    if (stored && ALL_THEMES.includes(stored as Theme)) return stored as Theme;
+    return THEMES.HOLOGRAPHIC;
+  });
+
+  // Apply theme attribute on mount (lazy init sets state but not DOM)
+  useEffect(() => {
+    if (theme !== THEMES.HOLOGRAPHIC) {
+      document.documentElement.setAttribute("data-theme", theme);
     }
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const setTheme = useCallback((t: Theme) => {
     setThemeState(t);

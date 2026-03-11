@@ -1,3 +1,4 @@
+// @ts-nocheck
 // Asset: SSE Event Forwarding Pattern
 // Shows how SDK session events are forwarded to the dashboard via Server-Sent Events.
 // Reference: src/app/api/pipeline/stream/route.ts

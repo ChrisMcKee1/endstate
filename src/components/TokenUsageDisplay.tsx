@@ -688,11 +688,12 @@ export function TokenUsageDisplay({
   // Track compaction flash timing — show a dramatic flash when compaction just ended
   const [justCompacted, setJustCompacted] = useState(false);
   const compactTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const prevCompacting = useRef(false);
+  const prevCompacting = useRef(isCompacting);
 
   useEffect(() => {
     // Detect transition from compacting → not compacting
     if (prevCompacting.current && !isCompacting) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: detect prop transition via ref, triggers one-time flash
       setJustCompacted(true);
       compactTimerRef.current = setTimeout(() => setJustCompacted(false), 2000);
     }
@@ -760,7 +761,7 @@ export function TokenUsageDisplay({
   // Prefer SDK-native context window data (session.usage_info) when available.
   // Falls back to model metadata, then to estimation.
   const sdkTokenLimit = metrics.contextTokenLimit ?? 0;
-  const sdkCurrentTokens = metrics.contextCurrentTokens ?? 0;
+  const _sdkCurrentTokens = metrics.contextCurrentTokens ?? 0;
   const modelMax = metrics.modelMaxContextTokens ?? 0;
   const agentMax = useMemo(() => {
     // Tier 1: SDK session.usage_info provides exact token limit

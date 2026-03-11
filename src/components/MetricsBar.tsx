@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useEffect } from "react";
-import { motion, useMotionValue, useSpring } from "framer-motion";
+import { motion } from "framer-motion";
 import { AnimateNumber } from "motion-plus/react";
 import type { PipelineState, Task } from "@/lib/types";
 import { TASK_STATUSES, SEVERITIES } from "@/lib/types";
@@ -18,23 +18,7 @@ interface MetricsSnapshot {
   compactions?: number;
   contextUsage?: number;
 }
-// ─── Animated counter hook — used for MetricCards ────────────────────────────
 
-function useAnimatedValue(target: number) {
-  const [display, setDisplay] = useState(0);
-  const motionVal = useMotionValue(0);
-  const spring = useSpring(motionVal, { stiffness: 80, damping: 20 });
-
-  useEffect(() => {
-    motionVal.set(target);
-  }, [target]); // eslint-disable-line react-hooks/exhaustive-deps -- motionVal is a stable MotionValue ref
-
-  useEffect(() => {
-    return spring.on("change", (v: number) => setDisplay(Math.round(v)));
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps -- spring is a stable MotionValue ref
-
-  return display;
-}
 // ─── Component ───────────────────────────────────────────────────────────────
 
 interface MetricsBarProps {
