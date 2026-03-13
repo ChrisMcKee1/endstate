@@ -26,6 +26,20 @@ const eslintConfig = defineConfig([
           caughtErrorsIgnorePattern: "^_",
         },
       ],
+      // Prefer `as const` objects + derived union types over inline string literal unions.
+      // Catches patterns like: useState<"foo" | "bar">  or  type X = "a" | "b"
+      // Use PIPELINE_ACTIONS, PIPELINE_STATUSES, etc. instead.
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: "TSTypeAliasDeclaration > TSUnionType > TSLiteralType > Literal[value]",
+          message: "Prefer an `as const` object + derived union type over inline string literal unions. See PIPELINE_STATUSES pattern in types.ts.",
+        },
+        {
+          selector: "TSTypeReference > TSTypeParameterInstantiation > TSUnionType > TSLiteralType > Literal[value]",
+          message: "Prefer an `as const` object + derived union type over inline string literal unions (e.g. useState<PipelineAction> instead of useState<\"starting\" | \"stopping\">).",
+        },
+      ],
     },
   },
 ]);

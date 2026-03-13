@@ -124,6 +124,24 @@ export const PIPELINE_STATUSES = {
 export type PipelineStatus =
   (typeof PIPELINE_STATUSES)[keyof typeof PIPELINE_STATUSES];
 
+export const PIPELINE_ACTIONS = {
+  STARTING: "starting",
+  STOPPING: "stopping",
+} as const;
+
+export type PipelineAction =
+  (typeof PIPELINE_ACTIONS)[keyof typeof PIPELINE_ACTIONS];
+
+export const CONNECTION_STATES = {
+  DISCONNECTED: "disconnected",
+  CONNECTING: "connecting",
+  CONNECTED: "connected",
+  ERROR: "error",
+} as const;
+
+export type ConnectionState =
+  (typeof CONNECTION_STATES)[keyof typeof CONNECTION_STATES];
+
 export const SESSION_EVENT_TYPES = {
   ASSISTANT_MESSAGE_DELTA: "assistant.message_delta",
   ASSISTANT_MESSAGE: "assistant.message",

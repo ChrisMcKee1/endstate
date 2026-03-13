@@ -1,9 +1,9 @@
 import { CopilotClient as SdkClient } from "@github/copilot-sdk";
-
-type ClientState = "disconnected" | "connecting" | "connected" | "error";
+import { CONNECTION_STATES } from "@/lib/types";
+import type { ConnectionState } from "@/lib/types";
 
 let instance: SdkClient | null = null;
-let state: ClientState = "disconnected";
+let state: ConnectionState = CONNECTION_STATES.DISCONNECTED;
 let currentCwd: string | null = null;
 
 /**
@@ -22,15 +22,15 @@ export async function getClient(targetCwd?: string): Promise<SdkClient> {
 
   if (instance) return instance;
 
-  state = "connecting";
+  state = CONNECTION_STATES.CONNECTING;
   try {
     instance = new SdkClient(targetCwd ? { cwd: targetCwd } : undefined);
     await instance.start();
-    state = "connected";
+    state = CONNECTION_STATES.CONNECTED;
     currentCwd = targetCwd ?? null;
     return instance;
   } catch (err) {
-    state = "error";
+    state = CONNECTION_STATES.ERROR;
     instance = null;
     throw err;
   }
@@ -43,13 +43,13 @@ export async function stopClient(): Promise<void> {
     await instance.stop();
   } finally {
     instance = null;
-    state = "disconnected";
+    state = CONNECTION_STATES.DISCONNECTED;
     currentCwd = null;
   }
 }
 
 /** Current connectivity state of the client. */
-export function getClientState(): ClientState {
+export function getClientState(): ConnectionState {
   return state;
 }
 

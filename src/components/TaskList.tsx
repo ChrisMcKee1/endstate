@@ -23,9 +23,26 @@ const _STATUS_COLORS: Record<TaskStatus, string> = {
   [TASK_STATUSES.WONT_FIX]: "text-text-muted",
 };
 
-type SortKey = "severity" | "status" | "cycle";
-type FilterSeverity = Severity | "ALL";
-type FilterStatus = "ALL" | "ACTIVE" | "BLOCKED" | "DONE" | "SKIPPED";
+const SORT_KEYS = {
+  SEVERITY: "severity",
+  STATUS: "status",
+  CYCLE: "cycle",
+} as const;
+type SortKey = (typeof SORT_KEYS)[keyof typeof SORT_KEYS];
+
+const FILTER_SEVERITIES = {
+  ALL: "ALL",
+} as const;
+type FilterSeverity = Severity | typeof FILTER_SEVERITIES.ALL;
+
+const FILTER_STATUSES = {
+  ALL: "ALL",
+  ACTIVE: "ACTIVE",
+  BLOCKED: "BLOCKED",
+  DONE: "DONE",
+  SKIPPED: "SKIPPED",
+} as const;
+type FilterStatus = (typeof FILTER_STATUSES)[keyof typeof FILTER_STATUSES];
 
 const SEVERITY_ORDER: Record<Severity, number> = {
   [SEVERITIES.CRITICAL]: 0,
@@ -152,9 +169,9 @@ interface TaskListProps {
 }
 
 export function TaskList({ tasks, onSelectTask, onRefreshTasks, isRunning = false }: TaskListProps) {
-  const [sortBy, setSortBy] = useState<SortKey>(() => loadTaskPrefs()?.sortBy ?? "severity");
-  const [filterSeverity, setFilterSeverity] = useState<FilterSeverity>(() => loadTaskPrefs()?.filterSeverity ?? "ALL");
-  const [filterStatus, setFilterStatus] = useState<FilterStatus>(() => loadTaskPrefs()?.filterStatus ?? "ALL");
+  const [sortBy, setSortBy] = useState<SortKey>(() => loadTaskPrefs()?.sortBy ?? SORT_KEYS.SEVERITY);
+  const [filterSeverity, setFilterSeverity] = useState<FilterSeverity>(() => loadTaskPrefs()?.filterSeverity ?? FILTER_SEVERITIES.ALL);
+  const [filterStatus, setFilterStatus] = useState<FilterStatus>(() => loadTaskPrefs()?.filterStatus ?? FILTER_STATUSES.ALL);
   const [filterDomains, setFilterDomains] = useState<Set<Domain>>(() => {
     const saved = loadTaskPrefs()?.filterDomains;
     return saved?.length ? new Set(saved) : new Set<Domain>();
@@ -175,16 +192,16 @@ export function TaskList({ tasks, onSelectTask, onRefreshTasks, isRunning = fals
 
   const sortedTasks = useMemo(() => {
     let filtered = tasks;
-    if (filterSeverity !== "ALL") {
+    if (filterSeverity !== FILTER_SEVERITIES.ALL) {
       filtered = filtered.filter((t) => t.severity === filterSeverity);
     }
-    if (filterStatus === "ACTIVE") {
+    if (filterStatus === FILTER_STATUSES.ACTIVE) {
       filtered = filtered.filter((t) => t.status === TASK_STATUSES.OPEN || t.status === TASK_STATUSES.IN_PROGRESS);
-    } else if (filterStatus === "BLOCKED") {
+    } else if (filterStatus === FILTER_STATUSES.BLOCKED) {
       filtered = filtered.filter((t) => t.status === TASK_STATUSES.BLOCKED);
-    } else if (filterStatus === "DONE") {
+    } else if (filterStatus === FILTER_STATUSES.DONE) {
       filtered = filtered.filter((t) => t.status === TASK_STATUSES.RESOLVED);
-    } else if (filterStatus === "SKIPPED") {
+    } else if (filterStatus === FILTER_STATUSES.SKIPPED) {
       filtered = filtered.filter((t) => SKIPPED_STATUSES.has(t.status));
     }
     // Domain filter: task must match ALL selected domains

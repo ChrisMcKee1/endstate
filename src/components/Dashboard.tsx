@@ -10,9 +10,11 @@ import type {
   AgentRole,
 } from "@/lib/types";
 import {
+  PIPELINE_ACTIONS,
   PIPELINE_STATUSES,
   SESSION_EVENT_TYPES,
 } from "@/lib/types";
+import type { PipelineAction } from "@/lib/types";
 import { useSSE } from "@/hooks/useSSE";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { WorkflowGraph } from "@/components/WorkflowGraph";
@@ -110,7 +112,7 @@ export function Dashboard({ config }: DashboardProps) {
   const [isCompacting, setIsCompacting] = useState(false);
   const [currentConfig, setCurrentConfig] = useState(config);
   const [gitOpen, setGitOpen] = useState(false);
-  const [pipelineAction, setPipelineAction] = useState<"starting" | "stopping" | null>(null);
+  const [pipelineAction, setPipelineAction] = useState<PipelineAction | null>(null);
   const [showNewProjectConfirm, setShowNewProjectConfirm] = useState(false);
   const [showStartNewModal, setShowStartNewModal] = useState(false);
   const [selectedAgent, setSelectedAgent] = useState<AgentRole | null>(null);
@@ -168,8 +170,8 @@ export function Dashboard({ config }: DashboardProps) {
                 return merged.size !== prev.length ? [...merged] : prev;
               });
             }
-            // Clear the "starting" action once the pipeline confirms RUNNING
-            if (state.status === PIPELINE_STATUSES.RUNNING) {
+            // Clear the "starting" action once the pipeline confirms any active state
+            if (pipelineAction === PIPELINE_ACTIONS.STARTING) {
               setPipelineAction(null);
             }
           }
@@ -430,10 +432,10 @@ export function Dashboard({ config }: DashboardProps) {
       : pipelineState.status.toUpperCase();
 
   const isRunning = pipelineState.status === PIPELINE_STATUSES.RUNNING;
-  const canStart = !isRunning && pipelineAction !== "starting";
+  const canStart = !isRunning && pipelineAction !== PIPELINE_ACTIONS.STARTING;
 
   const startPipeline = useCallback(async (options?: { resume?: boolean }) => {
-    setPipelineAction("starting");
+    setPipelineAction(PIPELINE_ACTIONS.STARTING);
     setCompletedAgents([]);
     try {
       const res = await fetch("/api/pipeline/start", {
@@ -447,7 +449,7 @@ export function Dashboard({ config }: DashboardProps) {
   }, [currentConfig]);
 
   const stopPipeline = useCallback(async () => {
-    setPipelineAction("stopping");
+    setPipelineAction(PIPELINE_ACTIONS.STOPPING);
     try {
       const res = await fetch("/api/pipeline/stop", { method: "POST" });
       if (res.ok) {
@@ -522,7 +524,7 @@ export function Dashboard({ config }: DashboardProps) {
     }]);
 
     // Start the pipeline with the updated config
-    setPipelineAction("starting");
+    setPipelineAction(PIPELINE_ACTIONS.STARTING);
     try {
       const res = await fetch("/api/pipeline/start", {
         method: "POST",
@@ -531,7 +533,8 @@ export function Dashboard({ config }: DashboardProps) {
       });
       if (!res.ok) setPipelineAction(null);
     } catch { setPipelineAction(null); }
-    // On success, pipelineAction is cleared when SSE confirms RUNNING state
+    // Safety timeout: clear spinner after 15s if SSE never confirms state change
+    setTimeout(() => setPipelineAction((prev) => prev === PIPELINE_ACTIONS.STARTING ? null : prev), 15_000);
   }, [currentConfig]);
 
   const handleUpdateVision = useCallback(async (vision: string) => {
@@ -647,14 +650,14 @@ export function Dashboard({ config }: DashboardProps) {
               whileTap={{ scale: 0.92 }}
               transition={{ type: "spring", stiffness: 400, damping: 17 }}
               onClick={stopPipeline}
-              disabled={pipelineAction === "stopping"}
+              disabled={pipelineAction === PIPELINE_ACTIONS.STOPPING}
               className="flex items-center gap-1.5 rounded-full border border-severity-critical/20 bg-severity-critical/10 px-3.5 py-1.5 text-[10px] font-semibold uppercase tracking-widest text-severity-critical transition-colors hover:bg-severity-critical/20 disabled:opacity-40"
               aria-label="Stop pipeline"
             >
               <svg className="h-3 w-3" viewBox="0 0 24 24" fill="currentColor">
                 <rect x="6" y="6" width="12" height="12" rx="2" />
               </svg>
-              {pipelineAction === "stopping" ? (
+              {pipelineAction === PIPELINE_ACTIONS.STOPPING ? (
                 <motion.span animate={{ opacity: [0.5, 1, 0.5] }} transition={{ repeat: Infinity, duration: 1 }}>
                   Stopping…
                 </motion.span>
@@ -669,7 +672,7 @@ export function Dashboard({ config }: DashboardProps) {
                   whileTap={{ scale: 0.92 }}
                   transition={{ type: "spring", stiffness: 400, damping: 17 }}
                   onClick={() => startPipeline({ resume: true })}
-                  disabled={pipelineAction === "starting"}
+                  disabled={pipelineAction === PIPELINE_ACTIONS.STARTING}
                   className="flex items-center gap-1.5 rounded-full border border-accent/20 bg-accent/10 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-widest text-accent transition-colors hover:bg-accent/20 disabled:opacity-40"
                   aria-label="Resume pipeline"
                 >
@@ -692,7 +695,7 @@ export function Dashboard({ config }: DashboardProps) {
                 <svg className="h-3 w-3" viewBox="0 0 24 24" fill="currentColor">
                   <polygon points="6,4 20,12 6,20" />
                 </svg>
-                {pipelineAction === "starting" ? (
+                {pipelineAction === PIPELINE_ACTIONS.STARTING ? (
                   <motion.span animate={{ opacity: [0.5, 1, 0.5] }} transition={{ repeat: Infinity, duration: 1 }}>
                     Starting…
                   </motion.span>
@@ -858,7 +861,7 @@ export function Dashboard({ config }: DashboardProps) {
       {/* ── Steering Bar ───────────────────────────────────────────────── */}
       <div className="relative z-10 shrink-0">
         <ErrorBoundary fallbackTitle="Steering Bar Error">
-          <SteeringBar status={pipelineAction === "starting" ? PIPELINE_STATUSES.RUNNING : pipelineState.status} onSteered={handleSteered} onNewVision={handleNewVision} />
+          <SteeringBar status={pipelineAction === PIPELINE_ACTIONS.STARTING ? PIPELINE_STATUSES.RUNNING : pipelineState.status} onSteered={handleSteered} onNewVision={handleNewVision} />
         </ErrorBoundary>
       </div>
 
@@ -979,7 +982,7 @@ export function Dashboard({ config }: DashboardProps) {
 
       {/* ── Vision loading overlay ────────────────────────────────────── */}
       <AnimatePresence>
-        {pipelineAction === "starting" && pipelineState.status !== PIPELINE_STATUSES.RUNNING && (
+        {pipelineAction === PIPELINE_ACTIONS.STARTING && pipelineState.status !== PIPELINE_STATUSES.RUNNING && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}

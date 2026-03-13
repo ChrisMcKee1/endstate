@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import type { SSEEvent, SessionEventType } from "@/lib/types";
+import type { SSEEvent, SessionEventType, ConnectionState } from "@/lib/types";
+import { CONNECTION_STATES } from "@/lib/types";
 
 const MAX_BACKOFF_MS = 30_000;
 const FLUSH_INTERVAL_MS = 16; // ~60fps
@@ -9,11 +10,9 @@ const HEARTBEAT_TIMEOUT_MS = 45_000; // Reconnect if no data in 45s
 const BUFFER_HIGH_WATER = 5000;
 const BUFFER_LOW_WATER = 3000;
 
-type ConnectionStatus = "connecting" | "connected" | "disconnected" | "error";
-
 interface UseSSEReturn {
   events: SSEEvent[];
-  connectionStatus: ConnectionStatus;
+  connectionStatus: ConnectionState;
   latestByType: Map<SessionEventType, SSEEvent>;
   /** Call to acknowledge processed events so the buffer can be freed */
   acknowledge: (count: number) => void;
@@ -26,7 +25,7 @@ interface UseSSEReturn {
 
 export function useSSE(url: string): UseSSEReturn {
   const [connectionStatus, setConnectionStatus] =
-    useState<ConnectionStatus>("connecting");
+    useState<ConnectionState>(CONNECTION_STATES.CONNECTING);
 
   // Monotonic generation counter — bumped each time events array is replaced.
   // Lets consumers know when the array shifted so they can reset cursors.
@@ -109,7 +108,7 @@ export function useSSE(url: string): UseSSEReturn {
         // No data received within HEARTBEAT_TIMEOUT_MS — connection is stale
         if (!disposed) {
           es?.close();
-          setConnectionStatus("disconnected");
+          setConnectionStatus(CONNECTION_STATES.DISCONNECTED);
           scheduleRetry();
         }
       }, HEARTBEAT_TIMEOUT_MS);
@@ -127,13 +126,13 @@ export function useSSE(url: string): UseSSEReturn {
       if (disposed) return;
       es?.close();
       if (retryTimer) { clearTimeout(retryTimer); retryTimer = null; }
-      setConnectionStatus("connecting");
+      setConnectionStatus(CONNECTION_STATES.CONNECTING);
 
       es = new EventSource(url);
 
       es.onopen = () => {
         if (disposed) return;
-        setConnectionStatus("connected");
+        setConnectionStatus(CONNECTION_STATES.CONNECTED);
         retryCount = 0;
         resetHeartbeatTimer();
       };
@@ -155,7 +154,7 @@ export function useSSE(url: string): UseSSEReturn {
       es.onerror = () => {
         if (disposed) return;
         es?.close();
-        setConnectionStatus("disconnected");
+        setConnectionStatus(CONNECTION_STATES.DISCONNECTED);
         if (heartbeatTimer) clearTimeout(heartbeatTimer);
         scheduleRetry();
       };

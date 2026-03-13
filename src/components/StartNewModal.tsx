@@ -47,7 +47,11 @@ const SCENARIO_TEMPLATES = [
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
-type ModalView = "choose" | "vision";
+const MODAL_VIEWS = {
+  CHOOSE: "choose",
+  VISION: "vision",
+} as const;
+type ModalView = (typeof MODAL_VIEWS)[keyof typeof MODAL_VIEWS];
 
 interface StartNewModalProps {
   tasks: Task[];
@@ -61,7 +65,7 @@ export function StartNewModal({ tasks, onResume, onNewVision, onClose }: StartNe
   const hasOpenTasks = openTasks.length > 0;
 
   // If no tasks, go straight to vision input
-  const [view, setView] = useState<ModalView>(hasOpenTasks ? "choose" : "vision");
+  const [view, setView] = useState<ModalView>(hasOpenTasks ? MODAL_VIEWS.CHOOSE : MODAL_VIEWS.VISION);
   const [vision, setVision] = useState("");
   const [isStarting, startTransition] = useTransition();
 
@@ -108,7 +112,7 @@ export function StartNewModal({ tasks, onResume, onNewVision, onClose }: StartNe
       >
         <AnimatePresence mode="wait">
           {/* ── Choose view: resume or new ────────────────────────────── */}
-          {view === "choose" && (
+          {view === MODAL_VIEWS.CHOOSE && (
             <motion.div
               key="choose"
               initial={{ opacity: 0, x: -20 }}
@@ -159,7 +163,7 @@ export function StartNewModal({ tasks, onResume, onNewVision, onClose }: StartNe
                   whileHover={{ scale: 1.01, boxShadow: "0 0 16px rgba(0,255,163,0.12)" }}
                   whileTap={{ scale: 0.98 }}
                   transition={SPRING}
-                  onClick={() => setView("vision")}
+                  onClick={() => setView(MODAL_VIEWS.VISION)}
                   className="group flex w-full items-start gap-3 rounded-xl border border-status-live/20 bg-status-live/5 p-4 text-left transition-colors hover:border-status-live/40 hover:bg-status-live/10"
                 >
                   <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-status-live/10 text-status-live">
@@ -192,7 +196,7 @@ export function StartNewModal({ tasks, onResume, onNewVision, onClose }: StartNe
           )}
 
           {/* ── Vision input view ─────────────────────────────────────── */}
-          {view === "vision" && (
+          {view === MODAL_VIEWS.VISION && (
             <motion.div
               key="vision"
               initial={{ opacity: 0, x: 20 }}
@@ -206,7 +210,7 @@ export function StartNewModal({ tasks, onResume, onNewVision, onClose }: StartNe
                   <motion.button
                     whileHover={{ x: -2 }}
                     whileTap={{ scale: 0.95 }}
-                    onClick={() => setView("choose")}
+                    onClick={() => setView(MODAL_VIEWS.CHOOSE)}
                     className="text-xs text-text-muted transition-colors hover:text-text-primary"
                   >
                     ←

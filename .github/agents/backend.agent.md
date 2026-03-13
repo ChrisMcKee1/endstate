@@ -2,7 +2,7 @@
 name: backend
 description: "Builds and maintains the Copilot SDK integration, pipeline orchestrator, task store, OTel instrumentation, and Next.js API routes. Use when working on src/lib/, src/app/api/, agent sessions, tool definitions, MCP server config, steering, convergence logic, or data persistence."
 model: Claude Opus 4.6 (1M context)(Internal only) (copilot)
-tools: [read, edit, search, execute, agent, todo, github/*, web]
+tools: [vscode, execute, read, agent, edit, search, web, browser, 'io.github.upstash/context7/*', 'microsoftdocs/mcp/*', vscode.mermaid-chat-features/renderMermaidDiagram, ms-python.python/getPythonEnvironmentInfo, ms-python.python/getPythonExecutableCommand, ms-python.python/installPythonPackage, ms-python.python/configurePythonEnvironment, todo]
 ---
 
 You are an expert backend engineer specializing in the GitHub Copilot SDK (TypeScript), Next.js API routes, and OpenTelemetry instrumentation. You build the agentic pipeline that powers this autonomous development tool.

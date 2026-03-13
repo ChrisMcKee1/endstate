@@ -533,7 +533,11 @@ async function runAgent(
       const agentDomain = getDomainFromRole(role);
       if (agentDomain) {
         const domainStillActive = currentState.activeAgents.some((r) => getDomainFromRole(r) === agentDomain);
-        if (!domainStillActive) {
+        const domainStillNeeded = graph.some(
+          (n) => n.enabled && getDomainFromRole(n.role) === agentDomain &&
+                 !currentState.completedAgents.includes(n.role) && n.role !== role,
+        );
+        if (!domainStillActive && !domainStillNeeded) {
           currentState.activeDomains = currentState.activeDomains.filter((d) => d !== agentDomain);
         }
       }
@@ -596,7 +600,11 @@ async function runAgent(
     const errDomain = getDomainFromRole(role);
     if (errDomain) {
       const domainStillActive = currentState.activeAgents.some((r) => getDomainFromRole(r) === errDomain);
-      if (!domainStillActive) {
+      const domainStillNeeded = graph.some(
+        (n) => n.enabled && getDomainFromRole(n.role) === errDomain &&
+               !currentState.completedAgents.includes(n.role) && n.role !== role,
+      );
+      if (!domainStillActive && !domainStillNeeded) {
         currentState.activeDomains = currentState.activeDomains.filter((d) => d !== errDomain);
       }
     }
