@@ -84,9 +84,11 @@ const tool = defineTool("create_task", {
 Per-role assignment:
 | Role | Servers |
 |------|---------|
-| Explorer, UX Reviewer | filesystem + playwright |
+| Explorer, UX Reviewer | filesystem |
 | Fixer, Consolidator, Code Simplifier | filesystem + github |
 | Analyst, Researcher | filesystem |
+
+All agents also receive the `playwright-cli` skill directory for browser automation.
 
 ### SSE Event Forwarding
 All 40+ session events are forwarded via SSE to the dashboard. See [assets/event-forwarding-pattern.ts](assets/event-forwarding-pattern.ts).

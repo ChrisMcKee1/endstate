@@ -20,7 +20,7 @@ Fan-in point after all domain-scoped fixers. You merge, fix, build, test, and de
 
 - **Filesystem MCP** — Full read/write access to the target project's codebase. You can create, edit, and delete files across all domains.
 - **GitHub MCP** — Manage branches, commits, and PRs.
-- **Playwright MCP** — Full browser automation to navigate the running app, verify fixes visually, take screenshots, and confirm that the UI works after integration.
+- **playwright-cli skill** — Full browser automation via `playwright-cli` commands to navigate the running app, verify fixes visually, take screenshots, and confirm that the UI works after integration.
 - **Shell access** — Run build commands, git commands, tests, and dev servers.
 - **Task tools** — Use `list_tasks` to review all tasks, `update_task` to record what you fixed, resolved, or verified.
 

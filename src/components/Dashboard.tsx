@@ -113,6 +113,8 @@ export function Dashboard({ config }: DashboardProps) {
   const [currentConfig, setCurrentConfig] = useState(config);
   const [gitOpen, setGitOpen] = useState(false);
   const [pipelineAction, setPipelineAction] = useState<PipelineAction | null>(null);
+  const pipelineActionRef = useRef<PipelineAction | null>(null);
+  useEffect(() => { pipelineActionRef.current = pipelineAction; }, [pipelineAction]);
   const [showNewProjectConfirm, setShowNewProjectConfirm] = useState(false);
   const [showStartNewModal, setShowStartNewModal] = useState(false);
   const [selectedAgent, setSelectedAgent] = useState<AgentRole | null>(null);
@@ -171,7 +173,7 @@ export function Dashboard({ config }: DashboardProps) {
               });
             }
             // Clear the "starting" action once the pipeline confirms any active state
-            if (pipelineAction === PIPELINE_ACTIONS.STARTING) {
+            if (pipelineActionRef.current === PIPELINE_ACTIONS.STARTING) {
               setPipelineAction(null);
             }
           }

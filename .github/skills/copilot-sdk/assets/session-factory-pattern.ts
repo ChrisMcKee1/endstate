@@ -79,7 +79,6 @@ function buildSystemPrompt(role: string, config: { projectPath: string }): strin
   const projectContext = `
 ## PROJECT CONTEXT
 **Target project path:** ${config.projectPath}
-**Target app URL:** ${config.appUrl}
 **Inspiration:** "${config.inspiration}"
 `;
 
@@ -101,13 +100,6 @@ function getMcpServersForRole(role: string, projectPath: string) {
     tools: ["*"],
   };
 
-  const playwright = {
-    type: "local" as const,
-    command: "npx",
-    args: ["@playwright/mcp@latest"],
-    tools: ["*"],
-  };
-
   const github = {
     type: "local" as const,
     command: "npx",
@@ -115,17 +107,13 @@ function getMcpServersForRole(role: string, projectPath: string) {
     tools: ["*"],
   };
 
-  // Browser-facing agents get Playwright + filesystem
-  if (["explorer", "ux-reviewer"].includes(role)) {
-    return { fs: filesystem, playwright };
-  }
-
   // Code-fixing agents get filesystem + GitHub
   if (["fixer", "code-simplifier", "consolidator"].includes(role)) {
     return { fs: filesystem, github };
   }
 
-  // Analysis agents get filesystem only
+  // All other agents get filesystem only
+  // (browser automation is provided via playwright-cli skill directory)
   return { fs: filesystem };
 }
 

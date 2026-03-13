@@ -10,6 +10,7 @@ import { exec } from "child_process";
 import { promisify } from "util";
 import path from "path";
 import fs from "fs";
+import fsPromises from "fs/promises";
 
 const execAsync = promisify(exec);
 
@@ -112,22 +113,31 @@ export async function removeWorktree(
 ): Promise<void> {
   const key = worktreeKey(projectPath, domain);
   const info = activeWorktrees.get(key);
-  if (!info) return;
+  const worktreePath = info?.path ?? path.join(projectPath, WORKTREE_DIR, domain);
 
   try {
-    await execAsync(`git worktree remove "${info.path}" --force`, {
+    await execAsync(`git worktree remove "${worktreePath}" --force`, {
       cwd: projectPath,
     });
   } catch {
-    // Best effort cleanup
+    // git worktree remove failed (locked files on Windows) — force-remove the directory
+    try {
+      await fsPromises.rm(worktreePath, { recursive: true, force: true });
+      // Prune stale worktree entries from git
+      await execAsync("git worktree prune", { cwd: projectPath });
+    } catch {
+      // Directory may already be gone
+    }
   }
 
-  try {
-    await execAsync(`git branch -D "${info.branch}"`, {
-      cwd: projectPath,
-    });
-  } catch {
-    // Branch may not exist
+  if (info) {
+    try {
+      await execAsync(`git branch -D "${info.branch}"`, {
+        cwd: projectPath,
+      });
+    } catch {
+      // Branch may not exist
+    }
   }
 
   activeWorktrees.delete(key);
@@ -142,14 +152,40 @@ export function getWorktreePath(
 }
 
 export async function cleanupAllWorktrees(projectPath: string): Promise<void> {
+  // 1. Clean up any worktrees tracked in memory
   const toRemove: string[] = [];
   for (const [key, info] of activeWorktrees) {
     if (key.startsWith(`${projectPath}::`)) {
       toRemove.push(info.domain);
     }
   }
-
   await Promise.all(toRemove.map((domain) => removeWorktree(projectPath, domain)));
+
+  // 2. Scan disk for orphaned worktree directories (handles missed in-memory cleanup)
+  const worktreeRoot = path.join(projectPath, WORKTREE_DIR);
+  try {
+    const entries = await fsPromises.readdir(worktreeRoot);
+    for (const entry of entries) {
+      const entryPath = path.join(worktreeRoot, entry);
+      const stat = await fsPromises.stat(entryPath).catch(() => null);
+      if (stat?.isDirectory()) {
+        try {
+          await execAsync(`git worktree remove "${entryPath}" --force`, { cwd: projectPath });
+        } catch {
+          await fsPromises.rm(entryPath, { recursive: true, force: true }).catch(() => {});
+        }
+      }
+    }
+    // Prune any stale worktree metadata
+    await execAsync("git worktree prune", { cwd: projectPath }).catch(() => {});
+    // Remove the parent directory if empty
+    const remaining = await fsPromises.readdir(worktreeRoot).catch(() => []);
+    if (remaining.length === 0) {
+      await fsPromises.rmdir(worktreeRoot).catch(() => {});
+    }
+  } catch {
+    // .endstate-worktrees directory may not exist
+  }
 }
 
 export { WORKTREE_DIR };

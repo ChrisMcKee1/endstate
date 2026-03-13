@@ -97,7 +97,6 @@ const agentGraphNodeSchema = z.object({
 
 export const PipelineConfigSchema = z.object({
   projectPath: z.string().min(1),
-  appUrl: z.string().url(),
   inspiration: z.string().min(1),
   maxCycles: z.number().int().min(1).max(50),
   model: z.string().min(1),

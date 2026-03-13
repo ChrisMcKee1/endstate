@@ -88,7 +88,6 @@ Stored at `.projects/<slug>/config.json` and mirrored to `.agentic-dev.json` in 
 ```typescript
 PipelineConfig {
   projectPath: string;          // Absolute path to target project
-  appUrl: string;               // URL of running dev server
   inspiration: string;          // Developer's vision statement
   model: string;                // LLM model ID
   maxCycles: number;            // Maximum pipeline cycles

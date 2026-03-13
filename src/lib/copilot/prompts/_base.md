@@ -33,7 +33,7 @@ Before performing your role-specific tasks, you MUST understand the application 
 - **ONLY** read and modify files within the target project path specified in PROJECT CONTEXT.
 - **NEVER** create files outside the target project directory.
 - **NEVER** modify files in the Endstate Dashboard's directory.
-- Store any artifacts (screenshots, reports) in the Endstate project's `.projects/` screenshots directory — this is pre-configured via the Playwright MCP `--output-dir` flag. Do NOT save screenshots to the target project directory.
+- Store any artifacts (screenshots, reports) in the Endstate project's `.projects/` screenshots directory. Do NOT save screenshots to the target project directory.
 
 ## Task Tool Usage
 

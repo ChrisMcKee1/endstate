@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { simpleGit } from "simple-git";
 import { z } from "zod";
+import path from "node:path";
+import fs from "node:fs/promises";
 import { getActiveProjectPath } from "@/lib/pipeline/project-resolver";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -58,9 +60,58 @@ export async function GET(request: Request) {
         const staged = searchParams.get("staged") === "true";
         const file = searchParams.get("file");
         if (file) {
+          // For worktree directories, list changed files inside the worktree
+          if (file.includes(".endstate-worktrees/") && file.endsWith("/")) {
+            const worktreePath = path.join(projectPath, file);
+            try {
+              const wtGit = getGit(worktreePath);
+              const wtStatus = await wtGit.status();
+              const changedFiles = [
+                ...wtStatus.modified.map((f) => `M  ${f}`),
+                ...wtStatus.not_added.map((f) => `?  ${f}`),
+                ...wtStatus.staged.map((f) => `A  ${f}`),
+                ...wtStatus.deleted.map((f) => `D  ${f}`),
+              ];
+              const summary = changedFiles.length > 0
+                ? changedFiles.join("\n")
+                : "No changes in worktree";
+              const wtDiff = await wtGit.diff();
+              return NextResponse.json({
+                diff: wtDiff || summary,
+                file,
+                worktree: true,
+                changedFiles: changedFiles.length,
+              });
+            } catch {
+              return NextResponse.json({ diff: "Unable to read worktree status", file });
+            }
+          }
           const diff = staged
             ? await git.diff(["--cached", "--", file])
             : await git.diff(["--", file]);
+          // For untracked (new) files, git diff returns empty — show file contents instead
+          if (!diff) {
+            try {
+              const fullPath = path.join(projectPath, file);
+              const stat = await fs.stat(fullPath);
+              if (stat.isDirectory()) {
+                const entries = await fs.readdir(fullPath);
+                return NextResponse.json({
+                  diff: `New directory with ${entries.length} entries:\n${entries.join("\n")}`,
+                  file,
+                });
+              }
+              const content = await fs.readFile(fullPath, "utf-8");
+              return NextResponse.json({
+                diff: content.length > 10000
+                  ? `${content.slice(0, 10000)}\n... (truncated)`
+                  : content,
+                file,
+              });
+            } catch {
+              return NextResponse.json({ diff: "No changes", file });
+            }
+          }
           return NextResponse.json({ diff, file });
         }
         const diff = staged

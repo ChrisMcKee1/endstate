@@ -217,7 +217,6 @@ export interface Task {
 
 export interface PipelineConfig {
   projectPath: string;
-  appUrl: string;
   inspiration: string;
   maxCycles: number;
   model: string;

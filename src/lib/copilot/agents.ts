@@ -6,7 +6,6 @@ import { dequeue, isEmpty } from "@/lib/pipeline/steering";
 import { getSkillDirectoriesForAgent } from "@/lib/pipeline/skill-manager";
 import { getMcpServersForAgent } from "@/lib/pipeline/mcp-manager";
 import { getCheatSheet } from "@/lib/pipeline/cheat-sheet-store";
-import { projectScreenshotsDir } from "@/lib/pipeline/project-resolver";
 import { startToolSpan, endSpanOk } from "@/lib/otel/spans";
 import { recordToolInvocation } from "@/lib/otel/metrics";
 import type { AgentRole, PipelineConfig } from "@/lib/types";
@@ -48,21 +47,12 @@ function loadSystemPrompt(role: AgentRole, config: PipelineConfig): string {
     "## PROJECT CONTEXT",
     "",
     `**Target project path:** ${config.projectPath}`,
-    `**Target app URL:** ${config.appUrl}`,
     `**Inspiration:** "${config.inspiration}"`,
     `**Current model:** ${config.model}`,
     "",
-    "## CRITICAL — URL TARGETING RULES",
-    "",
-    `You are reviewing the application at **${config.appUrl}** — this is the ONLY URL you should navigate to in a browser.`,
-    "",
-    "**DO NOT** navigate to localhost:3000 unless that is the target app URL above.",
     "**DO NOT** interact with the Endstate Dashboard — that is the orchestration tool managing you, not the app under review.",
     "**DO NOT** create, modify, or read files outside the target project path above.",
-    `**DO** use \`${config.appUrl}\` for all browser navigation, health checks, and API testing.`,
     `**DO** use \`${config.projectPath}\` as the root for all filesystem operations.`,
-    "",
-    "If the target app URL is not responding, create a CRITICAL task and stop. Do NOT fall back to browsing other URLs.",
   ].join("\n");
 
   // Inject cheat sheet for all agents except the Researcher (who produces it)
@@ -85,19 +75,6 @@ function loadSystemPrompt(role: AgentRole, config: PipelineConfig): string {
 }
 
 // ─── MCP server configs per role ──────────────────────────────────────────────
-
-function mcpPlaywright(projectPath: string) {
-  // Route screenshots to .projects/<slug>/screenshots/ so artifacts
-  // land in the correct project folder instead of the Endstate cwd.
-  const screenshotsDir = projectScreenshotsDir(projectPath);
-  return {
-    type: "local" as const,
-    command: "npx",
-    args: ["@playwright/mcp@latest", "--output-dir", screenshotsDir],
-    cwd: projectPath,
-    tools: ["*"],
-  };
-}
 
 function mcpFilesystem(projectPath: string) {
   return {
@@ -139,14 +116,14 @@ function mcpServersForRole(
 
     case AGENT_ROLES.EXPLORER:
     case AGENT_ROLES.UX_REVIEWER:
-      return { fs: mcpFilesystem(projectPath), playwright: mcpPlaywright(projectPath) };
+      return { fs: mcpFilesystem(projectPath) };
 
     case AGENT_ROLES.FIXER:
     case AGENT_ROLES.CODE_SIMPLIFIER:
       return { fs: mcpFilesystem(projectPath), github: mcpGithub(projectPath) };
 
     case AGENT_ROLES.CONSOLIDATOR:
-      return { fs: mcpFilesystem(projectPath), github: mcpGithub(projectPath), playwright: mcpPlaywright(projectPath) };
+      return { fs: mcpFilesystem(projectPath), github: mcpGithub(projectPath) };
 
     default:
       return { fs: mcpFilesystem(projectPath) };
@@ -224,6 +201,12 @@ export async function createAgentSession(
     role,
     config.skills ?? []
   );
+
+  // Always include Endstate's playwright-cli skill so all agents can use browser automation
+  const playwrightSkillDir = path.join(process.cwd(), ".github", "skills", "playwright-cli");
+  if (!skillDirectories.includes(playwrightSkillDir)) {
+    skillDirectories.push(playwrightSkillDir);
+  }
 
   // Resolve custom agents
   const customAgents = (config.customAgentDefinitions ?? [])

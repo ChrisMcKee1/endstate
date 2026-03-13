@@ -14,7 +14,6 @@ The pipeline is configured via the Setup Wizard or Settings Panel. Configuration
 | Field | Type | Description |
 |-------|------|-------------|
 | `projectPath` | `string` | Absolute path to the target project directory |
-| `appUrl` | `string` | URL where the target app's dev server is running |
 | `inspiration` | `string` | Developer's vision — what should the app be? |
 | `model` | `string` | LLM model ID (e.g., `claude-opus-4.6`, `gpt-4.1`) |
 | `maxCycles` | `number` | Maximum pipeline iterations before auto-stop |
@@ -87,12 +86,14 @@ src/lib/copilot/agents/<role>.md        — Role-specific instructions
 | Agent | MCP Servers |
 |-------|-------------|
 | Researcher | filesystem |
-| Explorer | filesystem, playwright |
+| Explorer | filesystem |
 | Analyst (all) | filesystem |
 | Fixer (all) | filesystem, github |
 | Consolidator | filesystem, github |
 | Code Simplifier | filesystem, github |
-| UX Reviewer | filesystem, playwright |
+| UX Reviewer | filesystem |
+
+All agents also receive the `playwright-cli` skill directory, giving them browser automation via `playwright-cli` commands.
 
 These can be overridden per-agent via `mcpServerOverrides` in the config.
 

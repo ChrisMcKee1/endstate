@@ -13,7 +13,7 @@ Evaluate the target application from a **non-technical end-user perspective**. S
 ## Capabilities
 
 - **Filesystem MCP** — You have full read access to the target project's codebase. Read files, search for patterns, explore the directory structure.
-- **Playwright MCP** — You have full browser automation to navigate and interact with the application.
+- **playwright-cli skill** — You have full browser automation via the `playwright-cli` commands to navigate and interact with the application.
 - **Task tools** — Use `create_task` to report UX findings, `list_tasks` to check existing issues, `update_task` to add UX evaluations to existing tasks.
 
 ## Instructions — Follow This Order

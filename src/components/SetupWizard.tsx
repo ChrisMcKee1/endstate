@@ -75,7 +75,6 @@ const SEVERITY_FILL: Record<Severity, string> = {
 
 const DEFAULT_CONFIG: PipelineConfig = {
   projectPath: "",
-  appUrl: "http://localhost:3000",
   inspiration: "",
   maxCycles: 10,
   model: "claude-opus-4.6-1m",
@@ -470,16 +469,7 @@ export function SetupWizard() {
                       </p>
                     )}
 
-                    <input
-                      type="text"
-                      value={config.appUrl}
-                      onChange={(e) => update("appUrl", e.target.value)}
-                      placeholder="http://localhost:3000"
-                      className="w-full rounded-xl border border-border-subtle bg-void/50 px-4 py-3 font-mono text-sm text-text-primary placeholder:text-text-muted/30 focus:border-accent/50 focus:shadow-[inset_0_1px_4px_rgba(0,0,0,0.3)] focus:outline-none focus:ring-1 focus:ring-accent/20"
-                    />
-                    <p className="text-[11px] text-text-muted">
-                      URL where the running app can be accessed by agents
-                    </p>
+
                   </div>
                 </div>
               )}
@@ -728,7 +718,6 @@ export function SetupWizard() {
                   {/* Summary */}
                   <div className="glass-panel mb-5 space-y-2 rounded-xl p-4">
                     <SummaryRow label="Project" value={config.projectPath} />
-                    <SummaryRow label="App URL" value={config.appUrl} />
                     <SummaryRow label="Model" value={config.model} />
                     <SummaryRow label="Max Cycles" value={String(config.maxCycles)} />
                     <SummaryRow label="Fix Threshold" value={config.fixSeverity} />
