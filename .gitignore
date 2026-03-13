@@ -27,6 +27,7 @@ Desktop.ini
 *.swp
 *.swo
 *~
+.vscode/.edge-debug-profile/
 
 # Logs
 *.log

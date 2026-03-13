@@ -205,11 +205,11 @@ export async function createAgentSession(
   config: PipelineConfig,
   overrides?: { workingDirectory?: string; configDir?: string },
 ) {
-  const client = await getClient();
-  const systemPrompt = loadSystemPrompt(role, config);
-
   // Use worktree path if provided, otherwise use the main project path
   const effectivePath = overrides?.workingDirectory ?? config.projectPath;
+
+  const client = await getClient(effectivePath);
+  const systemPrompt = loadSystemPrompt(role, config);
 
   // Resolve MCP servers: default per role, merged with user overrides
   const defaultMcps = mcpServersForRole(role, effectivePath);

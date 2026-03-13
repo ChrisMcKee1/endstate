@@ -7,11 +7,9 @@
       "request": "launch",
       "command": "npm run dev",
       "serverReadyAction": {
-        "action": "debugWithEdge",
-        "killOnServerStop": true,
-        "pattern": "- Local:.+(https?://.+)",
-        "uriFormat": "%s",
-        "webRoot": "${workspaceFolder}"
+        "action": "openExternally",
+        "pattern": "- Local:.+(https?://\\S+)",
+        "uriFormat": "%s"
       }
     },
     {
@@ -24,8 +22,9 @@
       "name": "Next.js: debug client-side",
       "type": "msedge",
       "request": "launch",
-      "url": "http://localhost:3000",
-      "webRoot": "${workspaceFolder}"
+      "url": "http://localhost:9000",
+      "webRoot": "${workspaceFolder}",
+      "userDataDir": "${workspaceFolder}/.vscode/.edge-debug-profile"
     }
   ]
 }

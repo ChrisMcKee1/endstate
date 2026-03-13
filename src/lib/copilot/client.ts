@@ -4,18 +4,30 @@ type ClientState = "disconnected" | "connecting" | "connected" | "error";
 
 let instance: SdkClient | null = null;
 let state: ClientState = "disconnected";
+let currentCwd: string | null = null;
 
 /**
- * Returns the singleton CopilotClient, creating and starting it on first call.
+ * Returns the CopilotClient singleton. When `targetCwd` is provided, the CLI
+ * server process is (re)started with that directory as its working directory.
+ * This ensures built-in tools, git context detection, and project-sniffing all
+ * operate against the target project — not the Endstate dashboard directory.
+ *
+ * If the target changes between calls the existing client is torn down first.
  */
-export async function getClient(): Promise<SdkClient> {
+export async function getClient(targetCwd?: string): Promise<SdkClient> {
+  // Tear down if the target project changed
+  if (instance && targetCwd && currentCwd !== targetCwd) {
+    await stopClient();
+  }
+
   if (instance) return instance;
 
   state = "connecting";
   try {
-    instance = new SdkClient();
+    instance = new SdkClient(targetCwd ? { cwd: targetCwd } : undefined);
     await instance.start();
     state = "connected";
+    currentCwd = targetCwd ?? null;
     return instance;
   } catch (err) {
     state = "error";
@@ -32,6 +44,7 @@ export async function stopClient(): Promise<void> {
   } finally {
     instance = null;
     state = "disconnected";
+    currentCwd = null;
   }
 }
 
