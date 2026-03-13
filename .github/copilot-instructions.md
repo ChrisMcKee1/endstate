@@ -196,13 +196,13 @@ All 40+ session event types are forwarded to the frontend via SSE from `/api/pip
 
 ## Reference
 
-- Master spec: [.spec/Agentic-App-Dev-Master-Spec.md](../.spec/Agentic-App-Dev-Master-Spec.md)
-- Architecture guide: [docs/architecture.md](../docs/architecture.md)
-- Project Knowledge system: [docs/project-knowledge.md](../docs/project-knowledge.md)
-- Markdown rendering: [docs/markdown-rendering.md](../docs/markdown-rendering.md)
-- Configuration reference: [docs/configuration.md](../docs/configuration.md)
-- Copilot SDK skill: [.github/skills/copilot-sdk/](skills/copilot-sdk/)
-- Next.js patterns: [.github/skills/next-best-practices/](skills/next-best-practices/)
-- Frontend design: [.github/skills/frontend-design/](skills/frontend-design/)
-- Playwright automation: [.github/skills/playwright-cli/](skills/playwright-cli/)
-- Excalidraw diagrams: [.github/skills/excalidraw-diagram-skill/](skills/excalidraw-diagram-skill/)
+- Master spec: [Agentic-App-Dev-Master-Spec](../.spec/Agentic-App-Dev-Master-Spec.md)
+- Architecture guide: [architecture.md](../docs/architecture.md)
+- Project Knowledge system: [project-knowledge.md](../docs/project-knowledge.md)
+- Markdown rendering: [markdown-rendering.md](../docs/markdown-rendering.md)
+- Configuration reference: [configuration.md](../docs/configuration.md)
+- Copilot SDK skill: [SKILL.md](./skills/copilot-sdk/SKILL.md)
+- Next.js patterns: [SKILL.md](./skills/next-best-practices/SKILL.md)
+- Frontend design: [SKILL.md](./skills/frontend-design/SKILL.md)
+- Playwright automation: [SKILL.md](./skills/playwright-cli/SKILL.md)
+- Excalidraw diagrams: [SKILL.md](./skills/excalidraw-diagram-skill/SKILL.md)
