@@ -31,7 +31,15 @@ export function ContextMeter({ usage, isCompacting, tokenCount, maxTokens }: Con
       title={`Context: ${pct}%${isCompacting ? " (compacting…)" : ""}`}
     >
       <div className="relative h-[40px] w-[40px]">
-        <svg viewBox="0 0 40 40" className="h-full w-full -rotate-90">
+        <svg
+          viewBox="0 0 40 40"
+          className="h-full w-full -rotate-90"
+          role="progressbar"
+          aria-valuenow={pct}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-label={`Context window usage: ${pct}%${isCompacting ? ' (compacting)' : ''}`}
+        >
           {/* Background ring */}
           <circle
             cx={20}

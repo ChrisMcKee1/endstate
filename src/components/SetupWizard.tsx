@@ -118,6 +118,15 @@ export function SetupWizard() {
   const [launching, setLaunching] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hasExistingConfig, setHasExistingConfig] = useState(false);
+  const stepHeadingRef = useRef<HTMLHeadingElement>(null);
+
+  // Auto-focus step heading on step change
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      stepHeadingRef.current?.focus();
+    }, 100);
+    return () => clearTimeout(timer);
+  }, [step]);
 
   // Check if there's an existing config we can go back to
   useEffect(() => {
@@ -266,7 +275,15 @@ export function SetupWizard() {
         </motion.div>
 
         {/* Step indicator */}
-        <div className="mb-8 flex flex-wrap items-center justify-center gap-1">
+        <nav aria-label="Setup steps" className="mb-8">
+          <div
+            role="progressbar"
+            aria-valuenow={step + 1}
+            aria-valuemin={1}
+            aria-valuemax={STEPS.length}
+            aria-label={`Setup progress: step ${step + 1} of ${STEPS.length}, ${STEPS[step].label}`}
+            className="flex flex-wrap items-center justify-center gap-1"
+          >
           {STEPS.map((s, i) => (
             <div key={i} className="flex items-center">
               <motion.button
@@ -320,10 +337,11 @@ export function SetupWizard() {
               )}
             </div>
           ))}
-        </div>
+          </div>
+        </nav>
 
         {/* Step content */}
-        <div className="glass-panel overflow-hidden rounded-2xl">
+        <div className="glass-panel overflow-hidden rounded-2xl" aria-live="polite">
           <AnimatePresence mode="wait" custom={direction}>
             <motion.div
               key={step}
@@ -333,12 +351,14 @@ export function SetupWizard() {
               animate="center"
               exit="exit"
               transition={{ type: "spring", stiffness: 300, damping: 28 }}
+              role="region"
+              aria-label={`Step ${step + 1}: ${STEPS[step].label}`}
               className="max-h-[60vh] overflow-y-auto p-4 sm:p-6"
             >
               {/* Step 0: Project Path */}
               {step === 0 && (
                 <div>
-                  <h2 className="mb-1 text-sm font-bold uppercase tracking-wider text-text-primary">
+                  <h2 ref={stepHeadingRef} tabIndex={-1} className="mb-1 text-sm font-bold uppercase tracking-wider text-text-primary focus:outline-none">
                     Project Path
                   </h2>
                   <p className="mb-4 text-xs text-text-muted">
@@ -350,9 +370,12 @@ export function SetupWizard() {
                     <div className="flex gap-2">
                       <div className="relative flex-1">
                         <input
+                          id="project-path"
                           type="text"
                           value={config.projectPath}
                           onChange={(e) => update("projectPath", e.target.value)}
+                          aria-label="Project folder path"
+                          aria-describedby="project-path-hint"
                           placeholder={typeof navigator !== "undefined" && navigator.platform?.startsWith("Win") ? "C:\\Users\\you\\project" : "~/your/project"}
                           className={`w-full rounded-xl border bg-void/50 px-4 py-3 pr-10 font-mono text-sm text-text-primary placeholder:text-text-muted/30 focus:outline-none focus:ring-1 focus:shadow-[inset_0_1px_4px_rgba(0,0,0,0.3)] ${
                             pathValidation?.exists && pathValidation.isDirectory
@@ -379,7 +402,7 @@ export function SetupWizard() {
                         type="button"
                         onClick={handleBrowse}
                         disabled={browsing}
-                        title="Open folder picker"
+                        aria-label="Browse for project folder"
                         className="shrink-0 rounded-xl border border-border-subtle bg-void/50 px-3 py-3 text-text-secondary transition-colors hover:border-accent/50 hover:bg-accent/5 hover:text-accent disabled:opacity-50"
                       >
                         {browsing ? (
@@ -452,19 +475,19 @@ export function SetupWizard() {
                     </AnimatePresence>
 
                     {pathValidation && !pathValidation.exists && config.projectPath.trim() && (
-                      <p className="text-[11px] text-severity-critical">
+                      <p role="alert" className="text-[11px] text-severity-critical">
                         Path not found. Check the path and try again.
                       </p>
                     )}
 
                     {pathValidation && pathValidation.exists && !pathValidation.isDirectory && (
-                      <p className="text-[11px] text-severity-critical">
+                      <p role="alert" className="text-[11px] text-severity-critical">
                         This is a file, not a folder. Please select a directory.
                       </p>
                     )}
 
                     {!browsing && !pathValidation && (
-                      <p className="text-[11px] text-text-muted">
+                      <p id="project-path-hint" className="text-[11px] text-text-muted">
                         Type the full path or click 📂 to open the folder picker
                       </p>
                     )}
@@ -477,7 +500,7 @@ export function SetupWizard() {
               {/* Step 1: Inspiration */}
               {step === 1 && (
                 <div>
-                  <h2 className="mb-1 text-sm font-bold uppercase tracking-wider text-text-primary">
+                  <h2 ref={stepHeadingRef} tabIndex={-1} className="mb-1 text-sm font-bold uppercase tracking-wider text-text-primary focus:outline-none">
                     Vision &amp; Inspiration
                   </h2>
                   <p className="mb-4 text-xs text-text-muted">
@@ -524,8 +547,10 @@ export function SetupWizard() {
                   </motion.div>
 
                   <textarea
+                    id="inspiration"
                     value={config.inspiration}
                     onChange={(e) => update("inspiration", e.target.value)}
+                    aria-label="Vision and inspiration"
                     placeholder="Describe your vision in detail. What are you building? Who is it for? What should the agents focus on?"
                     rows={6}
                     className="w-full resize-none rounded-xl border border-border-subtle bg-void/50 px-4 py-3 text-sm text-text-primary placeholder:text-text-muted/30 focus:border-accent/50 focus:shadow-[inset_0_1px_4px_rgba(0,0,0,0.3)] focus:outline-none focus:ring-1 focus:ring-accent/20"
@@ -536,7 +561,7 @@ export function SetupWizard() {
               {/* Step 2: Model Selection */}
               {step === 2 && (
                 <div>
-                  <h2 className="mb-1 text-sm font-bold uppercase tracking-wider text-text-primary">
+                  <h2 ref={stepHeadingRef} tabIndex={-1} className="mb-1 text-sm font-bold uppercase tracking-wider text-text-primary focus:outline-none">
                     AI Model
                   </h2>
                   <p className="mb-4 text-xs text-text-muted">
@@ -553,7 +578,7 @@ export function SetupWizard() {
               {/* Step 3: Pipeline Settings */}
               {step === 3 && (
                 <div>
-                  <h2 className="mb-1 text-sm font-bold uppercase tracking-wider text-text-primary">
+                  <h2 ref={stepHeadingRef} tabIndex={-1} className="mb-1 text-sm font-bold uppercase tracking-wider text-text-primary focus:outline-none">
                     Pipeline Settings
                   </h2>
                   <p className="mb-4 text-xs text-text-muted">
@@ -564,7 +589,7 @@ export function SetupWizard() {
                     {/* Max cycles */}
                     <div>
                       <div className="mb-1.5 flex items-center justify-between">
-                        <label className="text-xs text-text-secondary">
+                        <label htmlFor="max-cycles" className="text-xs text-text-secondary">
                           Max cycles
                         </label>
                         <span className="font-mono text-sm font-bold text-accent">
@@ -572,6 +597,7 @@ export function SetupWizard() {
                         </span>
                       </div>
                       <input
+                        id="max-cycles"
                         type="range"
                         min={1}
                         max={50}
@@ -579,6 +605,7 @@ export function SetupWizard() {
                         onChange={(e) =>
                           update("maxCycles", parseInt(e.target.value, 10))
                         }
+                        aria-label={`Max cycles: ${config.maxCycles}`}
                         className="w-full accent-accent"
                       />
                       <div className="mt-0.5 flex justify-between text-[11px] text-text-muted">
@@ -589,10 +616,10 @@ export function SetupWizard() {
 
                     {/* Severity threshold */}
                     <div>
-                      <label className="mb-1.5 block text-xs text-text-secondary">
+                      <label id="severity-threshold-label" className="mb-1.5 block text-xs text-text-secondary">
                         Fix severity threshold
                       </label>
-                      <div className="flex gap-1.5">
+                      <div className="flex gap-1.5" role="radiogroup" aria-labelledby="severity-threshold-label">
                         {SEVERITY_OPTIONS.map((sev) => (
                           <motion.button
                             key={sev}
@@ -600,6 +627,8 @@ export function SetupWizard() {
                             whileTap={{ scale: 0.95 }}
                             transition={SPRING}
                             onClick={() => update("fixSeverity", sev)}
+                            role="radio"
+                            aria-checked={config.fixSeverity === sev}
                             className={`flex-1 rounded-full py-2 text-[11px] font-bold transition-colors ${
                               config.fixSeverity === sev
                                 ? SEVERITY_FILL[sev]
@@ -643,8 +672,9 @@ export function SetupWizard() {
 
                     {/* Toggles row */}
                     <div className="flex gap-4">
-                      <label className="flex items-center gap-2 text-xs text-text-secondary">
+                      <label htmlFor="auto-approve" className="flex items-center gap-2 text-xs text-text-secondary">
                         <input
+                          id="auto-approve"
                           type="checkbox"
                           checked={config.autoApprove}
                           onChange={(e) =>
@@ -654,8 +684,9 @@ export function SetupWizard() {
                         />
                         Auto-approve
                       </label>
-                      <label className="flex items-center gap-2 text-xs text-text-secondary">
+                      <label htmlFor="infinite-sessions" className="flex items-center gap-2 text-xs text-text-secondary">
                         <input
+                          id="infinite-sessions"
                           type="checkbox"
                           checked={config.infiniteSessions}
                           onChange={(e) =>
@@ -673,7 +704,7 @@ export function SetupWizard() {
               {/* Step 4: Customize */}
               {step === 4 && (
                 <div>
-                  <h2 className="mb-1 text-sm font-bold uppercase tracking-wider text-text-primary">
+                  <h2 ref={stepHeadingRef} tabIndex={-1} className="mb-1 text-sm font-bold uppercase tracking-wider text-text-primary focus:outline-none">
                     Customize
                   </h2>
                   <p className="mb-4 text-xs text-text-muted">
@@ -708,7 +739,7 @@ export function SetupWizard() {
               {/* Step 5: Confirmation */}
               {step === 5 && (
                 <div>
-                  <h2 className="mb-1 text-sm font-bold uppercase tracking-wider text-text-primary">
+                  <h2 ref={stepHeadingRef} tabIndex={-1} className="mb-1 text-sm font-bold uppercase tracking-wider text-text-primary focus:outline-none">
                     Ready to Launch
                   </h2>
                   <p className="mb-4 text-xs text-text-muted">
@@ -760,6 +791,7 @@ export function SetupWizard() {
                   <AnimatePresence>
                     {error && (
                       <motion.p
+                        role="alert"
                         initial={{ opacity: 0, y: -4 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0 }}
@@ -779,6 +811,7 @@ export function SetupWizard() {
                     transition={SPRING}
                     onClick={handleLaunch}
                     disabled={launching}
+                    aria-label="Launch pipeline"
                     className="group relative w-full overflow-hidden rounded-xl bg-gradient-to-r from-accent to-accent-dim py-3.5 text-sm font-bold uppercase tracking-wider text-void transition-all disabled:opacity-60"
                   >
                     {/* Pulsing glow ring when ready */}
@@ -821,6 +854,7 @@ export function SetupWizard() {
               whileTap={{ scale: 0.95 }}
               onClick={step === 0 && hasExistingConfig ? () => router.push("/") : goBack}
               disabled={step === 0 && !hasExistingConfig}
+              aria-label={step === 0 && hasExistingConfig ? "Go back to dashboard" : "Go back to previous step"}
               className="text-xs text-text-muted transition-colors hover:text-text-primary disabled:invisible"
             >
               {step === 0 && hasExistingConfig ? "← Dashboard" : "← Back"}
@@ -833,6 +867,7 @@ export function SetupWizard() {
                 transition={SPRING}
                 onClick={goNext}
                 disabled={!canAdvance()}
+                aria-label={`Go to next step: ${step < 5 ? STEPS[step + 1].label : ''}`}
                 className="rounded-xl bg-accent/10 px-8 py-2.5 text-sm font-bold uppercase tracking-wider text-accent transition-all hover:bg-accent/20 disabled:opacity-30"
               >
                 Next →
@@ -866,6 +901,9 @@ function AgentToggle({
       whileTap={{ scale: 0.97 }}
       transition={SPRING}
       onClick={() => onChange(!checked)}
+      role="switch"
+      aria-checked={checked}
+      aria-label={`${label} agent`}
       className={`flex items-center gap-2 rounded-xl border px-3.5 py-2.5 text-xs transition-colors ${
         checked
           ? "border-accent/30 bg-accent/5 text-text-primary"

@@ -3,8 +3,8 @@
 import { motion } from "framer-motion";
 
 // Brand logo SVG — hex colors are intentional for precise SVG rendering.
-// These correspond to design tokens: accent (#00E5FF), accent-violet (#B026FF),
-// accent-emerald (#00FFA3), surface (#14151F), text-primary (#F8FAFC), text-secondary (#94A3B8).
+// These correspond to design tokens: accent (#E8B94A), accent-violet (#B026FF),
+// accent-emerald (#00FFA3), surface (#151721), text-primary (#F0F4F8), text-secondary (#8E9BB5).
 
 // Draw animation: each path segment draws itself in sequence
 const DRAW_TRANSITION = { duration: 1.2, ease: "easeInOut" as const };
@@ -31,13 +31,13 @@ export function Logo({ isProcessing = false, className = "", showTagline = true 
       >
         <defs>
           <radialGradient id="ambientAura" cx="50%" cy="40%" r="50%">
-            <stop offset="0%" stopColor="rgba(0, 229, 255, 0.08)" />
+            <stop offset="0%" stopColor="rgba(232, 185, 74, 0.08)" />
             <stop offset="50%" stopColor="rgba(176, 38, 255, 0.03)" />
             <stop offset="100%" stopColor="rgba(10, 11, 16, 0)" />
           </radialGradient>
 
           <linearGradient id="journeyGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stopColor="#00E5FF" />
+            <stop offset="0%" stopColor="#E8B94A" />
             <stop offset="50%" stopColor="#B026FF" />
             <stop offset="100%" stopColor="#00FFA3" />
           </linearGradient>
@@ -62,16 +62,16 @@ export function Logo({ isProcessing = false, className = "", showTagline = true 
         <circle cx="80" cy="43" r="60" fill="url(#ambientAura)" />
 
         {/* Vertical spine — the "E" backbone */}
-        <motion.line x1="45" y1="23" x2="45" y2="63" stroke="#00E5FF" strokeWidth="3.5" strokeLinecap="round" filter="url(#neonGlow)"
+        <motion.line x1="45" y1="23" x2="45" y2="63" stroke="#E8B94A" strokeWidth="3.5" strokeLinecap="round" filter="url(#neonGlow)"
           initial={{ pathLength: 0 }} animate={{ pathLength: 1 }}
           transition={{ ...DRAW_TRANSITION, delay: DRAW_DELAY_STEP * 0 }} />
-        <motion.circle cx="45" cy="23" r="3" fill="#14151F" stroke="#00E5FF" strokeWidth="2"
+        <motion.circle cx="45" cy="23" r="3" fill="#151721" stroke="#E8B94A" strokeWidth="2"
           initial={{ scale: 0, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
           transition={{ ...DRAW_TRANSITION, delay: DRAW_DELAY_STEP * 1 }} />
-        <motion.circle cx="45" cy="43" r="3" fill="#14151F" stroke="#00E5FF" strokeWidth="2"
+        <motion.circle cx="45" cy="43" r="3" fill="#151721" stroke="#E8B94A" strokeWidth="2"
           initial={{ scale: 0, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
           transition={{ ...DRAW_TRANSITION, delay: DRAW_DELAY_STEP * 2 }} />
-        <motion.circle cx="45" cy="63" r="3" fill="#14151F" stroke="#00E5FF" strokeWidth="2"
+        <motion.circle cx="45" cy="63" r="3" fill="#151721" stroke="#E8B94A" strokeWidth="2"
           initial={{ scale: 0, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
           transition={{ ...DRAW_TRANSITION, delay: DRAW_DELAY_STEP * 3 }} />
 
@@ -84,7 +84,7 @@ export function Logo({ isProcessing = false, className = "", showTagline = true 
           transition={{ ...DRAW_TRANSITION, delay: DRAW_DELAY_STEP * 5 }} />
 
         {/* Middle prong → infinity loop */}
-        <motion.line x1="48" y1="43" x2="55" y2="43" stroke="#00E5FF" strokeWidth="2" strokeLinecap="round"
+        <motion.line x1="48" y1="43" x2="55" y2="43" stroke="#E8B94A" strokeWidth="2" strokeLinecap="round"
           initial={{ pathLength: 0 }} animate={{ pathLength: 1 }}
           transition={{ ...DRAW_TRANSITION, delay: DRAW_DELAY_STEP * 6 }} />
         <path
@@ -116,7 +116,7 @@ export function Logo({ isProcessing = false, className = "", showTagline = true 
         <motion.polygon points="115,36 122,43 115,50 108,43" fill="#00FFA3" filter="url(#emeraldGlow)"
           initial={{ scale: 0, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
           transition={{ type: "spring", stiffness: 400, damping: 15, delay: DRAW_DELAY_STEP * 9 }} />
-        <motion.polygon points="115,39 119,43 115,47 111,43" fill="#F8FAFC"
+        <motion.polygon points="115,39 119,43 115,47 111,43" fill="#F0F4F8"
           initial={{ scale: 0, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
           transition={{ type: "spring", stiffness: 400, damping: 15, delay: DRAW_DELAY_STEP * 9 + 0.1 }} />
 
@@ -127,7 +127,7 @@ export function Logo({ isProcessing = false, className = "", showTagline = true 
               fontFamily="'Inter', -apple-system, sans-serif"
               fontSize="6.5"
               fontWeight="600"
-              fill="#94A3B8"
+              fill="#8E9BB5"
               textAnchor="middle"
               letterSpacing="3.5"
               initial={{ opacity: 0 }}
@@ -147,8 +147,8 @@ export function Logo({ isProcessing = false, className = "", showTagline = true 
               animate={{ opacity: 1, y: 0 }}
               transition={{ type: "spring", stiffness: 200, damping: 20, delay: DRAW_DELAY_STEP * 11 }}
             >
-              <tspan fill="#F8FAFC">END</tspan>
-              <tspan fill="#00E5FF">STATE</tspan>
+              <tspan fill="#F0F4F8">END</tspan>
+              <tspan fill="#E8B94A">STATE</tspan>
             </motion.text>
           </>
         )}

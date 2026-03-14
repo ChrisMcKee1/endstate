@@ -103,20 +103,27 @@ export function AgentStream({ entries, activeAgent }: AgentStreamProps) {
   const renderEntries = () => {
     if (entries.length === 0) {
       return (
-        <div className="flex h-full flex-col items-center justify-center gap-3 text-text-muted">
-          <div className="flex items-center gap-2">
-            <motion.span
-              animate={{ opacity: [0.3, 1, 0.3] }}
-              transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
-              className="inline-block h-2.5 w-2.5 rounded-full bg-accent/50"
-            />
-            <span className="text-[10px] uppercase tracking-widest text-text-secondary">
-              Awaiting agent activity
-            </span>
+        <div className="flex h-full flex-col items-center justify-center gap-4 text-text-muted px-6">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-border-subtle bg-overlay/50">
+            <svg className="h-5 w-5 text-text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M8.625 12a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H8.25m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H12m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 01-2.555-.337A5.972 5.972 0 015.41 20.97a5.969 5.969 0 01-.474-.065 4.48 4.48 0 00.978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25z" />
+            </svg>
           </div>
-          <p className="max-w-xs text-center text-xs text-text-muted">
-            Start the pipeline or connect to an active session
-          </p>
+          <div className="text-center">
+            <div className="flex items-center justify-center gap-2">
+              <motion.span
+                animate={{ opacity: [0.3, 1, 0.3] }}
+                transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
+                className="inline-block h-2 w-2 rounded-full bg-accent/50"
+              />
+              <span className="text-[10px] uppercase tracking-widest text-text-secondary">
+                Awaiting agent activity
+              </span>
+            </div>
+            <p className="mt-2 max-w-[260px] text-xs leading-relaxed text-text-muted">
+              Agent messages, tool calls, and reasoning will stream here as the pipeline runs
+            </p>
+          </div>
         </div>
       );
     }
@@ -158,7 +165,7 @@ export function AgentStream({ entries, activeAgent }: AgentStreamProps) {
           )}
 
           {/* Timestamp */}
-          <span className="shrink-0 pt-0.5 font-mono text-[10px] text-text-muted/70">
+          <span className="shrink-0 pt-0.5 font-mono text-[10px] text-text-muted/70 tabular-nums">
             {formatTime(entry.timestamp)}
           </span>
 

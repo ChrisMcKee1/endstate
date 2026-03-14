@@ -52,34 +52,34 @@
 /* ─── Theme Tokens (Endstate Design System) ────────────────────────────── */
 
 @theme inline {
-  /* Backgrounds / Surfaces — Midnight Obsidian palette */
-  --color-void: #0A0B10;
-  --color-surface: #14151F;
-  --color-elevated: #14151F;
+  /* Backgrounds / Surfaces — Indigo-tinted depth (never pure black) */
+  --color-void: #0E1018;
+  --color-surface: #151721;
+  --color-elevated: #181A26;
   --color-deep-surface: #101726;
-  --color-overlay: #1C1E2E;
+  --color-overlay: #1E2033;
 
   /* Borders — glass/translucent depth */
-  --color-border-subtle: rgba(255, 255, 255, 0.06);
+  --color-border-subtle: rgba(142, 155, 181, 0.1);
   --color-border-active: rgba(255, 255, 255, 0.14);
   --color-border-faint: rgba(255, 255, 255, 0.025);
   --color-border-whisper: rgba(255, 255, 255, 0.02);
-  --color-border-cyan-glass: rgba(0, 229, 255, 0.14);
+  --color-border-cyan-glass: rgba(232, 185, 74, 0.14);
   --color-border-emerald-glass: rgba(0, 255, 163, 0.12);
 
-  /* Text — Crisp Slate / Muted Steel / Deep Slate */
-  --color-text-primary: #F8FAFC;
-  --color-text-secondary: #94A3B8;
-  --color-text-muted: #475569;
+  /* Text — Crisp with subtle cool tint for cohesion */
+  --color-text-primary: #F0F4F8;
+  --color-text-secondary: #8E9BB5;
+  --color-text-muted: #4A5672;
 
-  /* Accent — The Flow (Vision → Orchestration → Outcome) */
-  --color-accent: #00E5FF;
-  --color-accent-dim: #0891B2;
+  /* Accent — Warm Amber (intentional, distinctive, not AI-slop cyan) */
+  --color-accent: #E8B94A;
+  --color-accent-dim: #B8922E;
   --color-accent-violet: #B026FF;
   --color-accent-emerald: #00FFA3;
 
-  /* Glass fills */
-  --color-glass-cyan: rgba(0, 229, 255, 0.04);
+  /* Glass fills — accent-tinted surfaces */
+  --color-glass-cyan: rgba(232, 185, 74, 0.04);
 
   /* Agent colors — standalone agents */
   --color-agent-researcher: #FF6B6B;
@@ -118,18 +118,48 @@
   --color-status-error: #EF4444;
   --color-status-idle: #475569;
 
+  /* Graph — cycle loop arc colors */
+  --color-graph-loop-right: #A855F7;
+  --color-graph-loop-left: #6366F1;
+
+  /* Graph — node states */
+  --color-node-idle-fill: rgba(20, 21, 31, 0.6);
+  --color-node-idle-stroke: rgba(255, 255, 255, 0.08);
+  --color-node-dimmed-stroke: rgba(255, 255, 255, 0.06);
+  --color-node-icon-idle: rgba(176, 190, 197, 0.35);
+  --color-edge-idle: rgba(255, 255, 255, 0.12);
+
   /* Fonts — Geist system */
   --font-display: var(--font-geist-sans);
   --font-body: var(--font-geist-sans);
   --font-code: var(--font-geist-mono);
 
-  /* Shadows & Glows */
-  --shadow-glow-cyan: 0 0 20px rgba(0, 229, 255, 0.4);
-  --shadow-glow-emerald: 0 0 20px rgba(0, 255, 163, 0.4);
-  --shadow-glow-violet: 0 0 20px rgba(176, 38, 255, 0.3);
-  --shadow-glass: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
-  --shadow-elevation-1: 0 1px 3px rgba(0, 0, 0, 0.5), 0 1px 2px rgba(0, 0, 0, 0.3);
-  --shadow-elevation-2: 0 4px 16px rgba(0, 0, 0, 0.5);
+  /* Shadows & Glows — tinted shadows for natural depth */
+  --shadow-glow-cyan: 0 0 20px rgba(232, 185, 74, 0.25);
+  --shadow-glow-emerald: 0 0 20px rgba(0, 255, 163, 0.35);
+  --shadow-glow-violet: 0 0 20px rgba(176, 38, 255, 0.25);
+  --shadow-glass: 0 8px 32px 0 rgba(14, 16, 24, 0.5);
+  --shadow-elevation-1: 0 1px 3px rgba(10, 12, 20, 0.6), 0 1px 2px rgba(10, 12, 20, 0.4);
+  --shadow-elevation-2: 0 4px 16px rgba(10, 12, 20, 0.6);
+
+  /* Motion — easing tokens (per motion-design reference) */
+  --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --duration-instant: 100ms;
+  --duration-fast: 200ms;
+  --duration-normal: 300ms;
+  --duration-slow: 500ms;
+
+  /* Spacing scale — 4pt base (spatial-design reference) */
+  --space-1: 0.25rem;  /* 4px */
+  --space-2: 0.5rem;   /* 8px */
+  --space-3: 0.75rem;  /* 12px */
+  --space-4: 1rem;     /* 16px */
+  --space-6: 1.5rem;   /* 24px */
+  --space-8: 2rem;     /* 32px */
+  --space-12: 3rem;    /* 48px */
+  --space-16: 4rem;    /* 64px */
 }
 
 /* ─── Base ──────────────────────────────────────────────────────────────── */
@@ -145,6 +175,12 @@ body {
   font-family: var(--font-body), system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  font-kerning: normal;
+}
+
+/* Tabular numbers for aligned metrics & data (typography reference) */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
 }
 
 /* ─── Scrollbar ─────────────────────────────────────────────────────────── */
@@ -159,12 +195,12 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(142, 155, 181, 0.12);
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.14);
+  background: rgba(142, 155, 181, 0.22);
 }
 
 /* Hide scrollbar while preserving scroll */
@@ -401,4 +437,15 @@ body {
 
 .phosphor-text {
   text-shadow: var(--phosphor-glow, none);
+}
+
+/* ─── Reduced Motion ───────────────────────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

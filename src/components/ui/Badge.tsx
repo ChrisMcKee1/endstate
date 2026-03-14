@@ -30,6 +30,8 @@ interface BadgeProps {
   size?: BadgeSize;
   /** Additional classes */
   className?: string;
+  /** ARIA role — defaults to "status" for screen readers. Set to "presentation" for decorative badges. */
+  role?: string;
 }
 
 // ─── Severity color map ──────────────────────────────────────────────────────
@@ -92,11 +94,13 @@ export const Badge = memo(function Badge({
   value,
   size = "sm",
   className = "",
+  role = "status",
 }: BadgeProps) {
   const colours = resolveColors(variant, value);
 
   return (
     <span
+      role={role}
       className={[
         "inline-flex shrink-0 items-center rounded-full font-bold uppercase tracking-wider",
         SIZE_CLASSES[size],

@@ -3,6 +3,13 @@
 // Single source of truth for all per-agent colors, labels, Tailwind classes,
 // and SVG icons. Every component that needs agent-specific styling imports
 // from here instead of maintaining its own copy.
+//
+// NOTE: Hex values here are intentional for SVG rendering and Tailwind's
+// arbitrary-value syntax (e.g. shadow-[0_0_8px_rgba(...)]) which doesn't
+// support CSS custom properties. These correspond to the Tailwind extends
+// in the theme config (agent-researcher, agent-explorer, etc.).
+// The UI accent color (--color-accent in globals.css) is SEPARATE from
+// agent colors — they are per-agent identity, not the UI brand accent.
 
 import { AGENT_ROLES, type AgentRole } from "@/lib/types";
 

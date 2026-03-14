@@ -6,6 +6,7 @@ import { AnimateNumber } from "motion-plus/react";
 import type { PipelineState, Task } from "@/lib/types";
 import { TASK_STATUSES, SEVERITIES } from "@/lib/types";
 import { AGENT_VISUALS } from "@/lib/agent-visuals";
+import { showToast } from "@/hooks/useToast";
 
 interface MetricsSnapshot {
   agentInputTokens?: Record<string, number>;
@@ -39,7 +40,7 @@ export function MetricsBar({ pipelineState, tasks }: MetricsBarProps) {
         .then((data: { metrics?: MetricsSnapshot }) => {
           if (data.metrics) setMetrics(data.metrics);
         })
-        .catch(() => {});
+        .catch(() => { showToast('Failed to load metrics'); });
     };
 
     fetchMetrics();
@@ -90,18 +91,20 @@ export function MetricsBar({ pipelineState, tasks }: MetricsBarProps) {
   }, [metrics.agentInputTokens, metrics.agentOutputTokens]);
 
   return (
-    <div className="flex h-full flex-col overflow-y-auto p-3 gap-4">
+    <div className="flex h-full flex-col overflow-y-auto p-3 gap-4" role="region" aria-label="Pipeline metrics">
       {/* Cycle counter */}
       <motion.div
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ type: "spring", stiffness: 400, damping: 30 }}
         className="glass-panel rounded-xl p-4 text-center"
+        role="group"
+        aria-label={`Cycles completed: ${pipelineState.currentCycle}`}
       >
         <p className="text-[10px] uppercase tracking-widest text-text-muted">
           Cycles Completed
         </p>
-        <p className="mt-1 font-mono text-3xl font-bold text-accent">
+        <p className="mt-1 font-mono text-3xl font-bold text-accent tabular-nums" aria-live="polite">
           <AnimateNumber
             transition={{ type: "spring", stiffness: 100, damping: 20 }}
           >
@@ -151,14 +154,14 @@ export function MetricsBar({ pipelineState, tasks }: MetricsBarProps) {
             <div className="flex gap-3 text-[10px]">
               <span className="flex items-center gap-1">
                 <span className="h-1.5 w-1.5 rounded-full bg-status-live" />
-                <span className="text-text-secondary">{metrics.buildsPass ?? 0}</span>
+                <span className="text-text-secondary tabular-nums">{metrics.buildsPass ?? 0}</span>
               </span>
               <span className="flex items-center gap-1">
                 <span className="h-1.5 w-1.5 rounded-full bg-severity-critical" />
-                <span className="text-text-secondary">{metrics.buildsFail ?? 0}</span>
+                <span className="text-text-secondary tabular-nums">{metrics.buildsFail ?? 0}</span>
               </span>
             </div>
-            <span className="font-mono text-sm font-bold text-text-primary">
+            <span className="font-mono text-sm font-bold text-text-primary tabular-nums">
               {buildTotal > 0 ? `${buildPassRate}%` : "—"}
             </span>
           </div>
@@ -170,7 +173,7 @@ export function MetricsBar({ pipelineState, tasks }: MetricsBarProps) {
         <h3 className="mb-2 text-[10px] uppercase tracking-widest text-text-muted">
           Tool Calls
         </h3>
-        <span className="font-mono text-lg font-bold text-text-primary">
+        <span className="font-mono text-lg font-bold text-text-primary tabular-nums">
           {metrics.toolInvocations ? Object.values(metrics.toolInvocations).reduce((s, v) => s + v, 0) : "—"}
         </span>
       </div>
@@ -181,7 +184,7 @@ export function MetricsBar({ pipelineState, tasks }: MetricsBarProps) {
           <h3 className="text-[10px] uppercase tracking-widest text-text-muted">
             Token Usage
           </h3>
-          <span className="font-mono text-[10px] text-accent">
+          <span className="font-mono text-[10px] text-accent tabular-nums">
             {totalTokens > 0 ? formatTokens(totalTokens) : "—"}
           </span>
         </div>
@@ -199,7 +202,7 @@ export function MetricsBar({ pipelineState, tasks }: MetricsBarProps) {
                     <div className={`h-2 w-2 rounded-full ${vis.bg}`} />
                     <span className="text-[11px] text-text-secondary">{vis.tag}</span>
                   </div>
-                  <span className={`font-mono text-[10px] ${total > 0 ? vis.text : "text-text-muted/30"}`}>
+                  <span className={`font-mono text-[10px] tabular-nums ${total > 0 ? vis.text : "text-text-muted/30"}`}>
                     {total > 0 ? formatTokens(total) : "—"}
                   </span>
                 </div>
@@ -237,8 +240,10 @@ function MetricCard({
       animate={{ opacity: 1, scale: 1 }}
       transition={{ type: "spring", stiffness: 400, damping: 30 }}
       className="glass-panel rounded-xl p-2.5 text-center"
+      role="group"
+      aria-label={`${label}: ${value}`}
     >
-      <p className={`font-mono text-lg font-bold ${color}`}>
+      <p className={`font-mono text-lg font-bold tabular-nums ${color}`} aria-live="polite">
         <AnimateNumber
           transition={{ type: "spring", stiffness: 120, damping: 20 }}
         >

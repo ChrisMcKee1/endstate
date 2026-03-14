@@ -21,7 +21,7 @@ src/lib/ — Business logic and SDK integration
 ...
 
 ## How to Run
-npm run dev — starts on port 3000
+npm run dev — starts on port 9000
 ...
 ---CHEAT-SHEET-END---
 ```

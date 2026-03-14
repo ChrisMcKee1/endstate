@@ -39,11 +39,9 @@ const BREATHE_TRANSITION = {
 
 const SPRING = { type: "spring" as const, stiffness: 200, damping: 20 };
 
-// Cycle arc colors — clockwise flow
-// Intentional: these purple/indigo shades are unique to the cycle visualization
-// and don't map to existing agent/domain tokens.
-const LOOP_COLOR_RIGHT = "#A855F7"; // violet — Explorer → UX (down the right)
-const LOOP_COLOR_LEFT = "#6366F1";  // indigo — UX → Explorer (up the left)
+// Cycle arc colors — reference CSS custom properties from globals.css
+const LOOP_COLOR_RIGHT = "var(--color-graph-loop-right)";
+const LOOP_COLOR_LEFT = "var(--color-graph-loop-left)";
 const LOOP_MARGIN = 140; // Must be large — cubic bezier peaks at ~75% of control point distance from center
 
 // ─── Layout computation ──────────────────────────────────────────────────────
@@ -268,9 +266,15 @@ export function WorkflowGraph({
         preserveAspectRatio="xMidYMid meet"
         className="h-full max-h-full w-full"
         style={{ minHeight: 300 }}
-        aria-label="Agent pipeline workflow"
+        role="img"
+        aria-label="Pipeline workflow graph"
       >
         <defs>
+          {/* Focus-visible styles for keyboard accessibility */}
+          <style>{`
+            .workflow-focus-ring { opacity: 0; }
+            .workflow-node:focus-visible .workflow-focus-ring { opacity: 1; }
+          `}</style>
           {nodes.map((node) => (
             <filter key={`glow-${node.role}`} id={`glow-${node.role}`} x="-100%" y="-100%" width="300%" height="300%">
               <feGaussianBlur stdDeviation="5" result="blur" />
@@ -384,7 +388,7 @@ export function WorkflowGraph({
         {/* ── Domain column labels ─────────────────────────── */}
         {domainColumns.map(({ domain, x }) => {
           const isDomainActive = activeDomainSet.size === 0 || activeDomainSet.has(domain);
-          const domainColor = DOMAIN_COLORS[domain] ?? "rgba(255,255,255,0.4)";
+          const domainColor = DOMAIN_COLORS[domain] ?? "var(--color-text-secondary)";
           return (
             <text
               key={`domain-label-${domain}`}
@@ -427,9 +431,9 @@ export function WorkflowGraph({
                 d={pathD}
                 fill="none"
                 stroke={
-                  !isDomainActive ? "rgba(255,255,255,0.06)"
+                  !isDomainActive ? "var(--color-node-dimmed-stroke)"
                     : isActive || isTraversed ? to.color
-                    : "rgba(255,255,255,0.12)"
+                    : "var(--color-edge-idle)"
                 }
                 strokeWidth={isActive ? 2.5 : isTraversed ? 1.5 : 0.5}
                 strokeDasharray={isActive ? "8 5" : "none"}
@@ -481,11 +485,30 @@ export function WorkflowGraph({
             <g
               key={node.role}
               onClick={() => handleNodeClick(node.role)}
-              style={{ cursor: onAgentClick ? "pointer" : "default" }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  handleNodeClick(node.role);
+                }
+              }}
+              tabIndex={onAgentClick ? 0 : undefined}
+              role={onAgentClick ? "button" : undefined}
+              aria-label={`Agent: ${node.label} — ${isCurrent ? 'active' : isCompleted ? 'completed' : isDimmed ? 'disabled' : 'idle'}`}
+              style={{ cursor: onAgentClick ? "pointer" : "default", outline: "none" }}
               opacity={isDimmed ? 0.2 : 1}
+              className="workflow-node"
             >
               {/* Native SVG tooltip */}
               <title>{`${node.label}\n${node.description}`}</title>
+
+              {/* Focus-visible ring — only visible via CSS when keyboard-focused */}
+              <circle
+                cx={node.x} cy={node.y} r={NODE_RADIUS + 5}
+                fill="none"
+                stroke="var(--color-accent)"
+                strokeWidth={2.5}
+                className="workflow-focus-ring"
+              />
 
               {/* Breathing glow ring */}
               <AnimatePresence>
@@ -512,7 +535,7 @@ export function WorkflowGraph({
 
               {/* Glass backdrop */}
               <motion.circle cx={node.x} cy={node.y} r={NODE_RADIUS}
-                fill={isCurrent ? node.color : "rgba(20, 21, 31, 0.6)"}
+                fill={isCurrent ? node.color : "var(--color-node-idle-fill)"}
                 initial={false}
                 animate={{
                   fillOpacity: isCurrent ? 0.2 : 1,
@@ -520,10 +543,10 @@ export function WorkflowGraph({
                   strokeOpacity: isDimmed ? 0.06 : isCurrent ? 1 : isCompleted ? 0.4 : 0.08,
                 }}
                 stroke={
-                  isDimmed ? "rgba(255,255,255,0.06)"
+                  isDimmed ? "var(--color-node-dimmed-stroke)"
                     : isCurrent ? node.color
                     : isCompleted ? node.color
-                    : "rgba(255,255,255,0.08)"
+                    : "var(--color-node-idle-stroke)"
                 }
                 strokeDasharray={isDimmed ? "4 3" : "none"}
                 transition={{ duration: 0.6, ease: "easeOut" }} />
@@ -548,7 +571,7 @@ export function WorkflowGraph({
                   strokeLinejoin="round"
                   initial={false}
                   animate={{
-                    stroke: isCurrent ? node.color : isCompleted ? node.color : "rgba(176,190,197,0.35)",
+                    stroke: isCurrent ? node.color : isCompleted ? node.color : "var(--color-node-icon-idle)",
                     strokeOpacity: isCurrent ? 1 : isCompleted ? 0.7 : 0.35,
                   }}
                   transition={{ duration: 0.4 }}
@@ -566,7 +589,7 @@ export function WorkflowGraph({
                     transition={SPRING}
                   >
                     <circle cx={node.x + NODE_RADIUS - 3} cy={node.y + NODE_RADIUS - 3} r={6}
-                      fill="rgba(20, 21, 31, 0.9)" stroke={node.color} strokeWidth={1} />
+                      fill="var(--color-surface)" stroke={node.color} strokeWidth={1} />
                     <path
                       d={`M ${node.x + NODE_RADIUS - 6} ${node.y + NODE_RADIUS - 3} l 2.5 2.5 L ${node.x + NODE_RADIUS} ${node.y + NODE_RADIUS - 6}`}
                       fill="none" stroke={node.color} strokeWidth={1.5}

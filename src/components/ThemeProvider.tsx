@@ -15,8 +15,13 @@ export type Theme = (typeof THEMES)[keyof typeof THEMES];
 
 // Theme preview colors — each theme has its own accent that differs from the
 // base design tokens. These hex values are the identity of each theme variant.
+// Preview swatches correspond to --color-accent in globals.css for each [data-theme].
+// Holographic (default): --color-accent (#E8B94A amber)
+// Pip-Boy:               --color-accent (#20c20e green)  — overrides accent + surface tokens
+// CRT:                   --color-accent (#33ff33 phosphor) — overrides accent + adds scanline overlay
+// Mainframe:             --color-accent (#00e5ff cyan)   — overrides accent + surface tokens
 const THEME_META: Record<Theme, { label: string; description: string; color: string }> = {
-  [THEMES.HOLOGRAPHIC]: { label: "Holographic", description: "Default — cyber cyan dark mode", color: "#00E5FF" },
+  [THEMES.HOLOGRAPHIC]: { label: "Holographic", description: "Default — amber dark mode", color: "#E8B94A" },
   [THEMES.PIP_BOY]: { label: "Pip-Boy", description: "Monochrome green terminal", color: "#20c20e" },
   [THEMES.CRT]: { label: "CRT", description: "Phosphor green with scanlines", color: "#33ff33" },
   [THEMES.MAINFRAME]: { label: "Mainframe", description: "Corporate dark cyan", color: "#00e5ff" },

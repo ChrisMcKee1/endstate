@@ -20,20 +20,16 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { WorkflowGraph } from "@/components/WorkflowGraph";
 import { AgentChatPanel } from "@/components/AgentChatPanel";
 import { SteeringBar } from "@/components/SteeringBar";
-import { TaskList } from "@/components/TaskList";
 import { TaskDetail } from "@/components/TaskDetail";
-import { UxScorecard } from "@/components/UxScorecard";
-import { MetricsBar } from "@/components/MetricsBar";
-import { ContextMeter } from "@/components/ContextMeter";
 import { SettingsPanel } from "@/components/SettingsPanel";
 import { CelebrationEffects } from "@/components/CelebrationEffects";
 import { GitPanel } from "@/components/GitPanel";
 import { TokenUsageDisplay } from "@/components/TokenUsageDisplay";
-import { AwardsPanel } from "@/components/AwardsPanel";
-import { ProjectKnowledge } from "@/components/ProjectKnowledge";
-import { getAgentVisual } from "@/lib/agent-visuals";
-import { VisionPanel } from "@/components/VisionPanel";
+import { DashboardHeader } from "@/components/DashboardHeader";
+import { DashboardSidebar, isSidebarTab } from "@/components/DashboardSidebar";
+import type { SidebarTab } from "@/components/DashboardSidebar";
 import { StartNewModal } from "@/components/StartNewModal";
+import { ToastContainer } from "@/components/ToastContainer";
 
 // ─── Stream entry type (UI-only) ──────────────────────────────────────────────
 
@@ -67,25 +63,7 @@ const INITIAL_STATE: PipelineState = {
   tasksSummary: { total: 0, open: 0, inProgress: 0, resolved: 0, deferred: 0 },
 };
 
-const SIDEBAR_TABS = ["knowledge", "tasks", "ux", "metrics", "awards", "vision"] as const;
-type SidebarTab = (typeof SIDEBAR_TABS)[number];
 
-const TAB_LABELS: Record<SidebarTab, string> = {
-  knowledge: "Intel",
-  tasks: "Tasks",
-  ux: "UX",
-  metrics: "Metrics",
-  awards: "Awards",
-  vision: "Vision",
-};
-
-const STATUS_COLORS: Record<string, string> = {
-  running: "bg-status-live",
-  paused: "bg-status-paused",
-  error: "bg-status-error",
-  idle: "bg-status-idle",
-  stopped: "bg-status-idle",
-};
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -102,7 +80,7 @@ export function Dashboard({ config }: DashboardProps) {
   const [activeTab, setActiveTab] = useState<SidebarTab>(() => {
     try {
       const saved = localStorage.getItem("endstate-sidebar-tab");
-      if (saved && SIDEBAR_TABS.includes(saved as SidebarTab)) return saved as SidebarTab;
+      if (saved && isSidebarTab(saved)) return saved;
     } catch { /* SSR */ }
     return "tasks";
   });
@@ -429,13 +407,7 @@ export function Dashboard({ config }: DashboardProps) {
 
   // ── Status label ────────────────────────────────────────────────────────────
 
-  const statusLabel =
-    pipelineState.status === PIPELINE_STATUSES.RUNNING
-      ? "LIVE"
-      : pipelineState.status.toUpperCase();
-
   const isRunning = pipelineState.status === PIPELINE_STATUSES.RUNNING;
-  const canStart = !isRunning && pipelineAction !== PIPELINE_ACTIONS.STARTING;
 
   const startPipeline = useCallback(async (options?: { resume?: boolean }) => {
     setPipelineAction(PIPELINE_ACTIONS.STARTING);
@@ -553,236 +525,37 @@ export function Dashboard({ config }: DashboardProps) {
   }, [currentConfig]);
 
   return (
-    <div id="main-content" className="noise relative flex h-screen flex-col overflow-hidden bg-void">
+    <>
+      {/* Mobile gate — dashboard requires desktop viewport */}
+      <div className="flex md:hidden h-screen items-center justify-center bg-void p-6 text-center">
+        <div className="max-w-sm space-y-3">
+          <div className="text-2xl">🖥️</div>
+          <h2 className="text-text-primary font-medium">Desktop Required</h2>
+          <p className="text-text-secondary text-sm">
+            Endstate&apos;s pipeline dashboard is designed for desktop screens.
+            Please use a device with at least 768px width.
+          </p>
+        </div>
+      </div>
+
+      <div id="main-content" className="noise relative hidden md:flex h-screen flex-col overflow-hidden bg-void">
       {/* ── Header ──────────────────────────────────────────────────────── */}
-      <header className="glass-panel relative z-10 flex h-14 shrink-0 items-center justify-between border-t-0 border-x-0 px-3 md:px-5 shadow-elevation-2">
-        <div className="flex items-center gap-2 md:gap-4 min-w-0">
-          <h1 className="text-sm font-bold uppercase tracking-[0.15em] text-accent shrink-0">
-            Endstate
-          </h1>
-          <span className="hidden md:inline truncate max-w-[160px] text-xs text-text-muted" title={currentConfig.projectPath}>
-            {currentConfig.projectPath.split(/[\\/]/).pop()}
-          </span>
-          <span className="hidden lg:inline truncate max-w-[200px] rounded-full bg-accent/10 px-2.5 py-0.5 font-mono text-[10px] text-accent shadow-[0_0_12px_rgba(0,229,255,0.1)]" title={currentConfig.model}>
-            {currentConfig.model}
-          </span>
-        </div>
-
-        <div className="flex items-center gap-2 md:gap-4">
-          <ContextMeter
-            usage={contextUsage}
-            isCompacting={isCompacting}
-          />
-
-          <div className="hidden sm:flex items-center gap-2">
-            <span className="text-[10px] uppercase tracking-widest text-text-muted">
-              {pipelineState.currentCycle === 0 && isRunning ? "Setup" : "Cycle"}
-            </span>
-            <span className="font-mono text-sm font-bold text-text-primary">
-              {pipelineState.currentCycle === 0 && isRunning ? "" : pipelineState.currentCycle}
-            </span>
-          </div>
-
-          {/* Active agent indicator(s) */}
-          {isRunning && (() => {
-            const agents = (pipelineState.activeAgents?.length ?? 0) > 0
-              ? pipelineState.activeAgents!
-              : pipelineState.activeAgent ? [pipelineState.activeAgent] : [];
-            if (agents.length === 0) return null;
-            return (
-              <div className="hidden md:flex items-center gap-2 overflow-x-auto">
-                {agents.map((agent) => {
-                  const vis = getAgentVisual(agent);
-                  return (
-                    <div key={agent} className="flex items-center gap-1.5 shrink-0">
-                      <motion.span
-                        animate={{ opacity: [0.4, 1, 0.4] }}
-                        transition={{ repeat: Infinity, duration: 1.5, ease: "easeInOut" }}
-                        className="h-1.5 w-1.5 rounded-full"
-                        style={{ backgroundColor: vis.hex }}
-                      />
-                      <span className="text-[10px] font-medium" style={{ color: vis.hex }}>
-                        {vis.label}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            );
-          })()}
-
-          <div className="flex items-center gap-1.5" aria-live="polite" aria-atomic="true">
-            <AnimatePresence mode="wait">
-              {pipelineState.status === PIPELINE_STATUSES.RUNNING ? (
-                <motion.span
-                  key="live-dot"
-                  initial={{ scale: 0, opacity: 0 }}
-                  animate={{ scale: [1, 1.4, 1], opacity: [0.7, 1, 0.7] }}
-                  exit={{ scale: 0, opacity: 0 }}
-                  transition={{ repeat: Infinity, duration: 1.5, ease: "easeInOut" }}
-                  className="h-2 w-2 rounded-full bg-status-live shadow-[0_0_8px_rgba(0,255,163,0.6)]"
-                />
-              ) : (
-                <motion.span
-                  key={`dot-${pipelineState.status}`}
-                  initial={{ scale: 0, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  exit={{ scale: 0, opacity: 0 }}
-                  transition={{ type: "spring", stiffness: 500, damping: 25 }}
-                  className={`h-2 w-2 rounded-full ${STATUS_COLORS[pipelineState.status] ?? "bg-status-idle"}`}
-                />
-              )}
-            </AnimatePresence>
-            <AnimatePresence mode="wait">
-              <motion.span
-                key={statusLabel}
-                initial={{ opacity: 0, y: -4 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 4 }}
-                transition={{ duration: 0.15, ease: [0.25, 1, 0.5, 1] }}
-                className="text-[10px] font-semibold uppercase tracking-widest text-text-secondary"
-              >
-                {statusLabel}
-              </motion.span>
-            </AnimatePresence>
-          </div>
-
-          <span aria-live="polite" aria-atomic="true">
-            {connectionStatus !== "connected" && (
-              <button
-                onClick={reconnect}
-                className="flex items-center gap-1.5 rounded-full bg-severity-critical/10 px-2.5 py-0.5 text-[10px] font-medium text-severity-critical transition-colors hover:bg-severity-critical/20"
-                title="Connection lost — click to reconnect now"
-              >
-                <motion.span
-                  animate={connectionStatus === "disconnected" ? { opacity: [0.5, 1, 0.5] } : {}}
-                  transition={{ repeat: Infinity, duration: 1.5 }}
-                >
-                  {connectionStatus === "error" || connectionStatus === "disconnected" ? "RECONNECT" : "CONNECTING"}
-                </motion.span>
-                <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182" />
-                </svg>
-              </button>
-            )}
-          </span>
-
-          {/* Pipeline Start / Stop / Resume (2026 §4 — spring physics, glow hover) */}
-          {isRunning ? (
-            <motion.button
-              whileHover={{ scale: 1.06, boxShadow: "0 0 20px rgba(239, 68, 68, 0.25)" }}
-              whileTap={{ scale: 0.92 }}
-              transition={{ type: "spring", stiffness: 400, damping: 17 }}
-              onClick={stopPipeline}
-              disabled={pipelineAction === PIPELINE_ACTIONS.STOPPING}
-              className="flex items-center gap-1.5 rounded-full border border-severity-critical/20 bg-severity-critical/10 px-3.5 py-1.5 text-[10px] font-semibold uppercase tracking-widest text-severity-critical transition-colors hover:bg-severity-critical/20 disabled:opacity-40"
-              aria-label="Stop pipeline"
-            >
-              <svg className="h-3 w-3" viewBox="0 0 24 24" fill="currentColor">
-                <rect x="6" y="6" width="12" height="12" rx="2" />
-              </svg>
-              {pipelineAction === PIPELINE_ACTIONS.STOPPING ? (
-                <motion.span animate={{ opacity: [0.5, 1, 0.5] }} transition={{ repeat: Infinity, duration: 1 }}>
-                  Stopping…
-                </motion.span>
-              ) : "Stop"}
-            </motion.button>
-          ) : (
-            <div className="flex items-center gap-1.5">
-              {/* Resume — show when there are incomplete tasks to work on */}
-              {(pipelineState.tasksSummary.open > 0 || pipelineState.tasksSummary.inProgress > 0) && (
-                <motion.button
-                  whileHover={{ scale: 1.06, boxShadow: "0 0 20px rgba(0, 229, 255, 0.25)" }}
-                  whileTap={{ scale: 0.92 }}
-                  transition={{ type: "spring", stiffness: 400, damping: 17 }}
-                  onClick={() => startPipeline({ resume: true })}
-                  disabled={pipelineAction === PIPELINE_ACTIONS.STARTING}
-                  className="flex items-center gap-1.5 rounded-full border border-accent/20 bg-accent/10 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-widest text-accent transition-colors hover:bg-accent/20 disabled:opacity-40"
-                  aria-label="Resume pipeline"
-                >
-                  <svg className="h-3 w-3" viewBox="0 0 24 24" fill="currentColor">
-                    <polygon points="6,4 20,12 6,20" />
-                  </svg>
-                  Resume
-                </motion.button>
-              )}
-              {/* Start New */}
-              <motion.button
-                whileHover={{ scale: 1.06, boxShadow: "0 0 20px rgba(0, 255, 163, 0.25)" }}
-                whileTap={{ scale: 0.92 }}
-                transition={{ type: "spring", stiffness: 400, damping: 17 }}
-                onClick={() => setShowStartNewModal(true)}
-                disabled={!canStart}
-                className="flex items-center gap-1.5 rounded-full border border-status-live/20 bg-status-live/10 px-3.5 py-1.5 text-[10px] font-semibold uppercase tracking-widest text-status-live transition-colors hover:bg-status-live/20 disabled:opacity-40"
-                aria-label="Start new pipeline"
-              >
-                <svg className="h-3 w-3" viewBox="0 0 24 24" fill="currentColor">
-                  <polygon points="6,4 20,12 6,20" />
-                </svg>
-                {pipelineAction === PIPELINE_ACTIONS.STARTING ? (
-                  <motion.span animate={{ opacity: [0.5, 1, 0.5] }} transition={{ repeat: Infinity, duration: 1 }}>
-                    Starting…
-                  </motion.span>
-                ) : "Start New"}
-              </motion.button>
-            </div>
-          )}
-
-          {/* Git (2026 §5 — glassmorphic icon button) */}
-          <motion.button
-            onClick={() => setGitOpen(true)}
-            whileHover={{ scale: 1.1, boxShadow: "0 0 12px rgba(0, 229, 255, 0.12)" }}
-            whileTap={{ scale: 0.9 }}
-            transition={{ type: "spring", stiffness: 400, damping: 17 }}
-            className="flex items-center gap-1.5 rounded-lg p-1.5 text-text-muted transition-colors hover:bg-white/[0.04] hover:text-agent-explorer"
-            aria-label="Git"
-          >
-            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5" />
-            </svg>
-          </motion.button>
-
-          {/* New Project */}
-          <motion.button
-            onClick={() => setShowNewProjectConfirm(true)}
-            whileHover={{ scale: 1.1, boxShadow: "0 0 12px rgba(255, 184, 0, 0.12)" }}
-            whileTap={{ scale: 0.9 }}
-            transition={{ type: "spring", stiffness: 400, damping: 17 }}
-            className="flex items-center gap-1.5 rounded-lg p-1.5 text-text-muted transition-colors hover:bg-white/[0.04] hover:text-agent-ux"
-            aria-label="New project"
-            title="New project — return to setup wizard"
-          >
-            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-            </svg>
-          </motion.button>
-
-          <button
-            onClick={() => setSettingsOpen(true)}
-            className="rounded-lg p-1.5 text-text-muted transition-colors hover:bg-white/[0.04] hover:text-text-primary"
-            aria-label="Settings"
-          >
-            <svg
-              className="h-4 w-4"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={1.5}
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 010 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 010-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28z"
-              />
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-              />
-            </svg>
-          </button>
-        </div>
-      </header>
+      <DashboardHeader
+        pipelineState={pipelineState}
+        currentConfig={currentConfig}
+        completedAgents={completedAgents}
+        pipelineAction={pipelineAction}
+        connectionStatus={connectionStatus}
+        contextUsage={contextUsage}
+        isCompacting={isCompacting}
+        onStartPipeline={startPipeline}
+        onStopPipeline={stopPipeline}
+        onReconnect={reconnect}
+        onOpenGit={() => setGitOpen(true)}
+        onOpenSettings={() => setSettingsOpen(true)}
+        onShowNewProjectConfirm={() => setShowNewProjectConfirm(true)}
+        onShowStartNewModal={() => setShowStartNewModal(true)}
+      />
 
       {/* ── Main Content: Graph (center) + Sidebar (collapsible right) ── */}
       <div className="relative z-10 flex min-h-0 flex-1 gap-px">
@@ -823,84 +596,17 @@ export function Dashboard({ config }: DashboardProps) {
         <div className={`flex shrink-0 flex-col overflow-hidden glass-panel border-t-0 border-b-0 border-r-0 transition-[width] duration-200 ease-in-out ${
           sidebarOpen ? "w-[300px] lg:w-[360px]" : "w-0 lg:w-[360px]"
         }`}>
-          {/* Tab bar */}
-          <div className="flex shrink-0 border-b border-border-subtle" role="tablist">
-            {SIDEBAR_TABS.map((tab) => (
-              <button
-                key={tab}
-                id={`sidebar-tab-${tab}`}
-                role="tab"
-                aria-selected={activeTab === tab}
-                aria-controls="sidebar-tabpanel"
-                onClick={() => setActiveTab(tab)}
-                className={`relative flex-1 py-2.5 text-center text-[10px] uppercase tracking-widest transition-colors ${
-                  activeTab === tab
-                    ? "text-accent"
-                    : "text-text-muted hover:text-text-secondary"
-                }`}
-              >
-                {TAB_LABELS[tab]}
-                {tab === "tasks" && tasks.length > 0 && (
-                  <span className="ml-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-accent/10 px-1 font-mono text-[9px] text-accent">
-                    {tasks.length}
-                  </span>
-                )}
-                {activeTab === tab && (
-                  <motion.div
-                    layoutId="sidebar-tab-indicator"
-                    className="absolute bottom-0 left-0 right-0 h-[2px] bg-accent"
-                    transition={{ type: "spring", stiffness: 400, damping: 30 }}
-                  />
-                )}
-              </button>
-            ))}
-          </div>
-
-          {/* Tab content */}
-          <div className="flex-1 overflow-hidden" role="tabpanel" id="sidebar-tabpanel" aria-labelledby={`sidebar-tab-${activeTab}`}>
-            <ErrorBoundary fallbackTitle="Sidebar Error">
-              <AnimatePresence mode="wait">
-                <motion.div
-                  key={activeTab}
-                  initial={{ opacity: 0, y: 6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -6 }}
-                  transition={{ duration: 0.15, ease: [0.25, 1, 0.5, 1] }}
-                  className="h-full"
-                >
-                  {activeTab === "tasks" && (
-                    <TaskList
-                      tasks={tasks}
-                      onSelectTask={setSelectedTask}
-                      onRefreshTasks={fetchTasks}
-                      isRunning={isRunning}
-                    />
-                  )}
-                  {activeTab === "ux" && <UxScorecard tasks={tasks} />}
-                  {activeTab === "metrics" && (
-                    <MetricsBar
-                      pipelineState={pipelineState}
-                      tasks={tasks}
-                    />
-                  )}
-                  {activeTab === "awards" && <AwardsPanel />}
-                  {activeTab === "knowledge" && (
-                    <ProjectKnowledge
-                      projectPath={currentConfig.projectPath}
-                      isRunning={isRunning}
-                    />
-                  )}
-                  {activeTab === "vision" && (
-                    <VisionPanel
-                      inspiration={currentConfig.inspiration}
-                      onUpdate={handleUpdateVision}
-                      isRunning={isRunning}
-                    />
-                  )}
-                </motion.div>
-              </AnimatePresence>
-            </ErrorBoundary>
-          </div>
+          <DashboardSidebar
+            activeTab={activeTab}
+            onTabChange={setActiveTab}
+            tasks={tasks}
+            pipelineState={pipelineState}
+            currentConfig={currentConfig}
+            isRunning={isRunning}
+            onSelectTask={setSelectedTask}
+            onRefreshTasks={fetchTasks}
+            onUpdateVision={handleUpdateVision}
+          />
         </div>
       </div>
 
@@ -919,6 +625,14 @@ export function Dashboard({ config }: DashboardProps) {
       </div>
 
       {/* ── Modals ─────────────────────────────────────────────────────── */}
+      {/*
+        Modals are used intentionally here for overlay panels (settings, task detail,
+        agent chat, git). In a fixed-viewport dashboard, modals are appropriate because
+        these are transient interactions that overlay the active workspace. The alternative
+        (side panels) would require splitting the viewport further and losing focus on the
+        primary workflow graph. Each modal uses proper focus trap, keyboard handling, and
+        aria-modal from the Modal primitive component.
+      */}
       <AnimatePresence>
         {selectedAgent && (
           <AgentChatPanel
@@ -1076,6 +790,10 @@ export function Dashboard({ config }: DashboardProps) {
         tasks={tasks}
         events={events}
       />
+
+      {/* ── Toast notifications ────────────────────────────────────────── */}
+      <ToastContainer />
     </div>
+    </>
   );
 }

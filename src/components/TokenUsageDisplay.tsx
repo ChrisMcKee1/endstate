@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, startTransition } from "react";
 import {
   motion,
   useMotionValue,
@@ -11,6 +11,7 @@ import {
 import type { AgentRole } from "@/lib/types";
 import { AGENT_ROLES } from "@/lib/types";
 import { getAgentVisual, hexToRgb } from "@/lib/agent-visuals";
+import { showToast } from "@/hooks/useToast";
 
 // ─── Agent display helpers ───────────────────────────────────────────────────
 
@@ -115,7 +116,7 @@ function SpringNumber({
   className?: string;
 }) {
   const motionVal = useMotionValue(0);
-  const spring = useSpring(motionVal, { stiffness: 60, damping: 18 });
+  const spring = useSpring(motionVal, { stiffness: 100, damping: 18 });
   const display = useTransform(spring, (v) => formatTokens(Math.round(v)));
   const [text, setText] = useState(formatTokens(0));
 
@@ -128,7 +129,7 @@ function SpringNumber({
   }, []); // eslint-disable-line react-hooks/exhaustive-deps -- display is a stable MotionValue ref
 
   return (
-    <span className={className} style={{ color }}>
+    <span className={className} style={{ color }} aria-hidden="true">
       {text}
     </span>
   );
@@ -156,7 +157,7 @@ function SpringInt({
   }, []); // eslint-disable-line react-hooks/exhaustive-deps -- spring is a stable MotionValue ref
 
   return (
-    <span className={className} style={{ color }}>
+    <span className={className} style={{ color }} aria-hidden="true">
       {display}
     </span>
   );
@@ -190,8 +191,17 @@ function AgentBar({
   const outputPct = maxTokens > 0 ? (outputTokens / maxTokens) * 100 : 0;
   const isGrowing = total > prevTotal;
 
+  const totalPct = maxTokens > 0 ? Math.round(((inputTokens + outputTokens) / maxTokens) * 100) : 0;
+
   return (
-    <div className="flex flex-1 flex-col gap-1.5 min-w-0">
+    <div
+      className="flex flex-1 flex-col gap-1.5 min-w-0"
+      role="meter"
+      aria-valuenow={inputTokens + outputTokens}
+      aria-valuemin={0}
+      aria-valuemax={maxTokens}
+      aria-label={`${meta.label} token usage: ${formatTokens(inputTokens + outputTokens)} of ${formatTokens(maxTokens)} (${totalPct}%)`}
+    >
       {/* Label row */}
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-1.5">
@@ -247,7 +257,7 @@ function AgentBar({
         {/* Input segment */}
         <motion.div
           className="absolute inset-y-0 left-0 rounded-full"
-          style={{ background: meta.gradient, opacity: 0.9 }}
+          style={{ background: meta.gradient, opacity: 0.9, willChange: isActive ? "transform" : "auto" }}
           initial={{ width: 0 }}
           animate={{ width: `${inputPct}%` }}
           transition={{ type: "spring", stiffness: 120, damping: 20 }}
@@ -260,6 +270,7 @@ function AgentBar({
             left: `${inputPct}%`,
             background: meta.gradient,
             opacity: 0.5,
+            willChange: isActive ? "transform" : "auto",
           }}
           initial={{ width: 0 }}
           animate={{ width: `${outputPct}%` }}
@@ -361,6 +372,8 @@ function StatPill({
   return (
     <motion.div
       className="relative flex flex-col items-center gap-1 rounded-xl px-3 py-2 min-w-[72px] bg-white/[0.02] border border-white/[0.05]"
+      role="group"
+      aria-label={`${label}: ${value}`}
       animate={
         isGrowing
           ? {
@@ -393,7 +406,7 @@ function StatPill({
       </AnimatePresence>
 
       <div className="flex items-center gap-1">
-        <span style={{ color }} className="text-[10px]">
+        <span style={{ color }} className="text-[10px]" aria-hidden="true">
           {icon}
         </span>
         <SpringInt
@@ -405,6 +418,8 @@ function StatPill({
       <span className="text-[8px] uppercase tracking-[0.15em] text-text-muted whitespace-nowrap">
         {label}
       </span>
+      {/* Screen reader live value */}
+      <span className="sr-only" aria-live="polite">{label}: {value}</span>
     </motion.div>
   );
 }
@@ -441,7 +456,14 @@ function BuildStreakBar({
         : "rgba(239, 68, 68, 0.3)";
 
   return (
-    <div className="flex flex-col gap-1 min-w-[100px]">
+    <div
+      className="flex flex-col gap-1 min-w-[100px]"
+      role="meter"
+      aria-valuenow={rate}
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-label={`Build success rate: ${total > 0 ? `${rate.toFixed(0)}%` : "no builds yet"} (${pass} passed, ${fail} failed)`}
+    >
       <div className="flex items-center justify-between">
         <span className="text-[8px] uppercase tracking-[0.15em] text-text-muted">
           Builds
@@ -513,7 +535,7 @@ function BuildStreakBar({
           }
           transition={
             rate === 100 && total > 0
-              ? { duration: 2, repeat: Infinity, ease: "easeInOut" }
+              ? { type: "tween", duration: 2, repeat: Infinity, ease: "easeInOut" }
               : {}
           }
         >
@@ -536,6 +558,9 @@ function CompactionIndicator({
   return (
     <motion.div
       className="relative flex flex-col items-center gap-1 rounded-xl px-3 py-2 min-w-[60px]"
+      role="status"
+      aria-live="polite"
+      aria-label={isCompacting ? `Compacting context window… (${count} total compactions)` : `${count} compactions completed`}
       style={{
         background: isCompacting ? "rgba(0, 229, 255, 0.05)" : "rgba(255,255,255,0.02)",
         border: `1px solid ${isCompacting ? "rgba(0, 229, 255, 0.2)" : "rgba(255,255,255,0.05)"}`,
@@ -584,6 +609,7 @@ function CompactionIndicator({
           viewBox="0 0 24 24"
           fill="none"
           stroke={isCompacting ? "var(--color-accent)" : "var(--color-text-secondary)"}
+          aria-hidden="true"
           strokeWidth={2}
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -620,7 +646,7 @@ function AgentLeaderboard({ turns }: { turns: Record<string, number> }) {
   if (sorted.length === 0) return null;
 
   return (
-    <div className="flex flex-col gap-1 min-w-[80px]">
+    <div className="flex flex-col gap-1 min-w-[80px]" role="group" aria-label="Agent turns leaderboard">
       <span className="text-[8px] uppercase tracking-[0.15em] text-text-muted text-center mb-0.5">
         Agent Turns
       </span>
@@ -709,6 +735,7 @@ export function TokenUsageDisplay({
         .then((r) => r.json())
         .then((data: { metrics?: FullMetrics }) => {
           if (cancelled || !data.metrics) return;
+          const freshMetrics = data.metrics;
 
           // Snapshot previous values from ref (not inside setState)
           const prev = metricsRef.current;
@@ -718,24 +745,30 @@ export function TokenUsageDisplay({
           for (const role of AGENT_ORDER) {
             totals[role] = (inp[role] ?? 0) + (out[role] ?? 0);
           }
-          setPrevTotals(totals);
+          startTransition(() => {
+            setPrevTotals(totals);
+          });
 
           const prevToolCalls = prev.toolInvocations
             ? Object.values(prev.toolInvocations).reduce((s, v) => s + v, 0)
             : 0;
-          setPrevMetrics({
-            buildsPass: prev.buildsPass ?? 0,
-            buildsFail: prev.buildsFail ?? 0,
-            toolCalls: prevToolCalls,
-            tasksResolved: prev.tasksResolved ?? 0,
-            compactions: prev.compactions ?? 0,
+          startTransition(() => {
+            setPrevMetrics({
+              buildsPass: prev.buildsPass ?? 0,
+              buildsFail: prev.buildsFail ?? 0,
+              toolCalls: prevToolCalls,
+              tasksResolved: prev.tasksResolved ?? 0,
+              compactions: prev.compactions ?? 0,
+            });
           });
 
           // Now update the metrics state and ref
-          metricsRef.current = data.metrics;
-          setMetrics(data.metrics);
+          metricsRef.current = freshMetrics;
+          startTransition(() => {
+            setMetrics(freshMetrics);
+          });
         })
-        .catch(() => {});
+        .catch(() => { showToast('Failed to load token metrics'); });
     };
 
     fetchMetrics();
@@ -790,6 +823,8 @@ export function TokenUsageDisplay({
       animate={{ opacity: 1, height: "auto" }}
       transition={{ type: "spring", stiffness: 300, damping: 30 }}
       className="glass-panel relative shrink-0 border-t-0 overflow-hidden"
+      role="region"
+      aria-label="Token usage and pipeline metrics"
     >
       {/* Ambient background gradient */}
       {hasAnyActivity && (
@@ -829,7 +864,7 @@ export function TokenUsageDisplay({
         {/* ── Token Section with Phase Tabs ── */}
         <div className="flex flex-col gap-1.5 flex-1 min-w-0 overflow-hidden">
           {/* Phase tabs */}
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1" role="tablist" aria-label="Pipeline phase filter">
             {PHASES.filter((phase) => {
               // Only show a phase tab if it has activity or is "all"
               if (!phase.roles) return true;
@@ -846,6 +881,11 @@ export function TokenUsageDisplay({
               return (
                 <button
                   key={phase.id}
+                  role="tab"
+                  aria-selected={isActive}
+                  aria-controls={`tabpanel-${phase.id}`}
+                  id={`tab-${phase.id}`}
+                  tabIndex={isActive ? 0 : -1}
                   onClick={() => setActivePhase(phase.id)}
                   className="rounded px-2 py-0.5 text-[8px] font-semibold uppercase tracking-widest transition-colors"
                   style={{
@@ -861,7 +901,12 @@ export function TokenUsageDisplay({
           </div>
 
           {/* Agent bars */}
-          <div className="flex flex-1 items-stretch gap-3 min-w-0 overflow-x-auto">
+          <div
+            className="flex flex-1 items-stretch gap-3 min-w-0 overflow-x-auto"
+            role="tabpanel"
+            id={`tabpanel-${activePhase}`}
+            aria-labelledby={`tab-${activePhase}`}
+          >
             {(() => {
               const phase = PHASES.find((p) => p.id === activePhase);
               const inp = metrics.agentInputTokens ?? {};
@@ -932,7 +977,7 @@ export function TokenUsageDisplay({
         </div>
 
         {/* Total tokens badge */}
-        <div className="flex flex-col items-center gap-0.5 shrink-0">
+        <div className="flex flex-col items-center gap-0.5 shrink-0" role="group" aria-label={`Total tokens consumed: ${formatTokens(totalTokens)}`}>
           <SpringNumber
             value={totalTokens}
             color={totalTokens > 0 ? "var(--color-accent)" : "var(--color-text-muted)"}
@@ -941,13 +986,14 @@ export function TokenUsageDisplay({
           <span className="text-[7px] uppercase tracking-[0.15em] text-text-muted">
             Tokens
           </span>
+          <span className="sr-only" aria-live="polite">Total tokens: {formatTokens(totalTokens)}</span>
         </div>
 
         {/* ── Divider ── */}
         <div className="hidden md:block h-10 w-px shrink-0 bg-white/[0.06]" />
 
         {/* ── Gamification Stats ── */}
-        <div className="hidden md:flex items-center gap-3 shrink-0">
+        <div className="hidden md:flex items-center gap-3 shrink-0" role="group" aria-label="Pipeline statistics">
           {/* Build streak */}
           <BuildStreakBar
             pass={metrics.buildsPass ?? 0}
@@ -958,7 +1004,7 @@ export function TokenUsageDisplay({
           {/* Stat pills */}
           <StatPill
             icon={
-              <svg className="h-2.5 w-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+              <svg className="h-2.5 w-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
               </svg>
             }
@@ -971,7 +1017,7 @@ export function TokenUsageDisplay({
 
           <StatPill
             icon={
-              <svg className="h-2.5 w-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+              <svg className="h-2.5 w-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <polyline points="20 6 9 17 4 12" />
               </svg>
             }

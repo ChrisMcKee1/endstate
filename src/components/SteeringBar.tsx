@@ -4,6 +4,7 @@ import { useState, useCallback, useEffect, type FormEvent } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { PipelineStatus } from "@/lib/types";
 import { PIPELINE_STATUSES } from "@/lib/types";
+import { showToast } from "@/hooks/useToast";
 
 const QUICK_CHIPS = [
   { label: "Skip to UX review", message: "Skip remaining steps and go directly to UX review" },
@@ -62,7 +63,7 @@ export function SteeringBar({ status, onSteered, onNewVision }: SteeringBarProps
           onSteered?.(text.trim());
         }
       } catch {
-        /* network error — silent */
+        showToast('Failed to send steering message');
       } finally {
         setSending(false);
       }
@@ -168,7 +169,8 @@ export function SteeringBar({ status, onSteered, onNewVision }: SteeringBarProps
           whileHover={{ scale: 1.08, boxShadow: isRunning ? "0 0 20px rgba(0, 229, 255, 0.4)" : "0 0 20px rgba(0, 255, 163, 0.4)" }}
           whileTap={{ scale: 0.92 }}
           animate={justSent ? { scale: [1, 1.15, 1], boxShadow: ["0 0 0px rgba(0,255,163,0)", "0 0 24px rgba(0,255,163,0.5)", "0 0 0px rgba(0,255,163,0)"] } : {}}
-          transition={{ type: "spring", stiffness: 400, damping: 17 }}
+          transition={justSent ? { duration: 0.4, ease: "easeInOut" } : { type: "spring", stiffness: 400, damping: 17 }}
+          aria-label={isRunning ? "Send steering message" : "Start with this vision"}
           className={`flex h-11 w-11 items-center justify-center rounded-full transition-colors disabled:opacity-20 ${
             justSent
               ? "bg-status-live/25 text-status-live"

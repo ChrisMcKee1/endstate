@@ -82,7 +82,7 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000). The setup wizard walks through:
+Open [http://localhost:9000](http://localhost:9000). The setup wizard walks through:
 
 1. **Project** — select the target codebase path
 2. **Vision** — describe what you want Endstate to accomplish

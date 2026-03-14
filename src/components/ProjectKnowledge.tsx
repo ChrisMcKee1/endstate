@@ -206,11 +206,16 @@ export function ProjectKnowledge({ projectPath, isRunning }: ProjectKnowledgePro
           </div>
           <div className="text-center">
             <p className="text-xs font-medium text-text-secondary">No project knowledge yet</p>
-            <p className="mt-1 text-[10px] text-text-muted">
+            <p className="mt-1 max-w-[280px] text-[10px] leading-relaxed text-text-muted">
               {isRunning
-                ? "The Researcher agent is analyzing your project — this will populate automatically"
-                : "Start the pipeline to auto-generate, or click Add above to write your own"}
+                ? "The Researcher agent is analyzing your target project and building a concise overview that all downstream agents use as shared context"
+                : "The Researcher will analyze your project’s tech stack, structure, and conventions — creating shared context that saves tokens and keeps every agent aligned"}
             </p>
+            {!isRunning && (
+              <p className="mt-2 text-[10px] text-text-muted/70">
+                Or click <span className="text-accent font-medium">Add</span> above to write your own
+              </p>
+            )}
           </div>
           {isRunning && (
             <motion.div
