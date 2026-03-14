@@ -13,6 +13,7 @@ import {
 
 // ─── Brand palette for confetti ──────────────────────────────────────────────
 
+// canvas-confetti requires raw hex values — cannot use CSS variables
 const CONFETTI_COLORS = ["#00E5FF", "#00FFA3", "#B026FF", "#FFB800"];
 const GOLD_COLORS = ["#FFE400", "#FFBD00", "#E89400", "#FFCA6C", "#FDFFB8"];
 
@@ -101,6 +102,8 @@ function smallBurst(
 
 // ─── Achievement definitions ─────────────────────────────────────────────────
 
+// Glow values use raw hex because they're concatenated with hex opacity suffixes
+// (e.g., `${glow}20`) in boxShadow strings — CSS vars can't be used that way.
 const ACHIEVEMENTS = {
   FIRST_FIX: { id: "first-fix", label: "First Fix", icon: "🔧", description: "First task resolved", glow: "#00FFA3" },
   CLEAN_SWEEP: { id: "clean-sweep", label: "Clean Sweep", icon: "🧹", description: "All tasks resolved", glow: "#00E5FF" },
@@ -318,6 +321,7 @@ export function CelebrationEffects({ tasks, events }: CelebrationEffectsProps) {
         evt.data.toolName === "run_build" &&
         evt.data.success === true
       ) {
+        // canvas-confetti requires raw hex values
         smallBurst({ x: 0.85, y: 0.5 }, ["#00FFA3", "#00C853", "#4ADE80"]);
       }
 
@@ -380,9 +384,8 @@ export function CelebrationEffects({ tasks, events }: CelebrationEffectsProps) {
             transition={SPRING}
           >
             <div
-              className="rounded-2xl border border-white/[0.08] px-6 py-3 shadow-[0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-xl"
+              className="rounded-2xl border border-white/[0.08] px-6 py-3 shadow-[0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-xl bg-surface/85"
               style={{
-                background: "rgba(20, 21, 31, 0.85)",
                 boxShadow:
                   "0 0 20px rgba(0, 229, 255, 0.15), 0 8px 32px rgba(0,0,0,0.4)",
               }}
@@ -404,9 +407,8 @@ export function CelebrationEffects({ tasks, events }: CelebrationEffectsProps) {
             return (
               <motion.div
                 key={id}
-                className="flex items-center gap-2 rounded-full border border-white/[0.08] px-3.5 py-1.5 shadow-lg backdrop-blur-xl"
+                className="flex items-center gap-2 rounded-full border border-white/[0.08] px-3.5 py-1.5 shadow-lg backdrop-blur-xl bg-surface/80"
                 style={{
-                  background: "rgba(20, 21, 31, 0.8)",
                   boxShadow: `0 0 12px ${achievement.glow}20`,
                 }}
                 initial={{ opacity: 0, x: 40, scale: 0.8 }}

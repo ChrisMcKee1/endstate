@@ -41,6 +41,7 @@ export class ErrorBoundary extends Component<
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ type: "spring", stiffness: 300, damping: 25 }}
+          role="alert"
           className="glass-panel glow-error flex flex-col items-center justify-center gap-4 rounded-xl p-8"
         >
           <motion.div
@@ -67,7 +68,7 @@ export class ErrorBoundary extends Component<
             {this.props.fallbackTitle ?? "Something went wrong"}
           </p>
           <p className="max-w-xs text-center text-xs text-text-muted">
-            {this.state.error?.message}
+            {this.state.error?.message ?? "An unexpected error occurred. Try reloading this panel."}
           </p>
           <motion.button
             whileHover={{ scale: 1.05 }}
@@ -76,7 +77,7 @@ export class ErrorBoundary extends Component<
             onClick={() => this.setState({ hasError: false, error: null })}
             className="mt-1 rounded-lg border border-border-subtle bg-elevated px-5 py-2 text-xs text-text-secondary transition-colors hover:bg-overlay hover:text-text-primary hover:shadow-[0_0_15px_rgba(239,68,68,0.1)]"
           >
-            Retry
+            Reload Panel
           </motion.button>
         </motion.div>
       );

@@ -129,6 +129,15 @@ export function GitPanel({ onClose }: GitPanelProps) {
     );
   }, [fetchStatus, fetchLog, fetchDiff]);
 
+  // Close on Escape
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [onClose]);
+
   const stageAll = useCallback(async () => {
     setStaging(true);
     setError(null);
@@ -213,10 +222,10 @@ export function GitPanel({ onClose }: GitPanelProps) {
         initial="hidden"
         animate="visible"
         exit="exit"
-        className="flex h-[72vh] w-[720px] max-w-[92vw] flex-col overflow-hidden rounded-2xl border border-border-subtle shadow-elevation-2"
+        className="flex h-[72vh] w-[720px] max-w-[92vw] flex-col overflow-hidden rounded-2xl border border-border-subtle shadow-elevation-2 bg-surface/[0.92] backdrop-blur-3xl"
         role="dialog"
         aria-modal="true"
-        style={{ background: "rgba(20, 21, 31, 0.92)", backdropFilter: "blur(24px)", WebkitBackdropFilter: "blur(24px)" }}
+        aria-label="Git operations"
       >
         {/* ── Header ──────────────────────────────────────────────── */}
         <div className="flex shrink-0 items-center justify-between border-b border-border-subtle px-5 py-3.5">
@@ -231,7 +240,7 @@ export function GitPanel({ onClose }: GitPanelProps) {
               Git
             </h2>
             {status?.branch && (
-              <span className="rounded-full bg-agent-explorer/10 px-2.5 py-0.5 font-[family-name:var(--font-code)] text-[10px] text-agent-explorer shadow-[0_0_12px_rgba(0,229,255,0.08)]">
+              <span className="truncate max-w-[160px] rounded-full bg-agent-explorer/10 px-2.5 py-0.5 font-[family-name:var(--font-code)] text-[10px] text-agent-explorer shadow-[0_0_12px_rgba(0,229,255,0.08)]" title={status.branch}>
                 {status.branch}
               </span>
             )}
@@ -252,7 +261,7 @@ export function GitPanel({ onClose }: GitPanelProps) {
 
           <div className="flex items-center gap-2">
             {/* View toggle — glassmorphic tabs */}
-            <div className="flex rounded-lg border border-border-subtle p-0.5" style={{ background: "rgba(10, 11, 16, 0.5)" }}>
+            <div className="flex rounded-lg border border-border-subtle p-0.5 bg-void/50">
               {(["changes", "log"] as const).map((view) => (
                 <motion.button
                   key={view}
@@ -282,6 +291,7 @@ export function GitPanel({ onClose }: GitPanelProps) {
               whileHover={{ scale: 1.1, rotate: 90 }}
               whileTap={{ scale: 0.9 }}
               transition={SPRING}
+              aria-label="Close git panel"
               className="rounded-lg p-1.5 text-text-muted transition-colors hover:bg-white/[0.04] hover:text-text-primary"
             >
               <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -454,7 +464,7 @@ export function GitPanel({ onClose }: GitPanelProps) {
                         </svg>
                       </motion.button>
                     </div>
-                    <div className="overflow-hidden rounded-xl border border-border-subtle" style={{ background: "rgba(10, 11, 16, 0.6)" }}>
+                    <div className="overflow-hidden rounded-xl border border-border-subtle bg-void/60">
                       {loadingFileDiff ? (
                         <div className="flex items-center justify-center py-8">
                           <motion.div
@@ -482,7 +492,7 @@ export function GitPanel({ onClose }: GitPanelProps) {
                     <h3 className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-text-muted">
                       Diff Preview
                     </h3>
-                    <div className="overflow-hidden rounded-xl border border-border-subtle" style={{ background: "rgba(10, 11, 16, 0.6)" }}>
+                    <div className="overflow-hidden rounded-xl border border-border-subtle bg-void/60">
                       <pre className="max-h-52 overflow-auto p-4 font-[family-name:var(--font-code)] text-[10px] leading-relaxed">
                         {renderColoredDiff(diff.slice(0, 5000))}
                         {diff.length > 5000 && <span className="text-text-muted">{"\n\n"}… truncated</span>}
@@ -534,8 +544,7 @@ export function GitPanel({ onClose }: GitPanelProps) {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 12 }}
               transition={SPRING}
-              className="shrink-0 border-t border-border-subtle p-4"
-              style={{ background: "rgba(20, 21, 31, 0.5)" }}
+              className="shrink-0 border-t border-border-subtle p-4 bg-surface/50"
             >
               <AnimatePresence mode="wait">
                 {error && (
@@ -545,6 +554,7 @@ export function GitPanel({ onClose }: GitPanelProps) {
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -4 }}
                     className="mb-2 text-[11px] text-severity-critical"
+                    role="alert"
                   >
                     {error}
                   </motion.p>

@@ -360,11 +360,7 @@ function StatPill({
 
   return (
     <motion.div
-      className="relative flex flex-col items-center gap-1 rounded-xl px-3 py-2 min-w-[72px]"
-      style={{
-        background: "rgba(255,255,255,0.02)",
-        border: "1px solid rgba(255,255,255,0.05)",
-      }}
+      className="relative flex flex-col items-center gap-1 rounded-xl px-3 py-2 min-w-[72px] bg-white/[0.02] border border-white/[0.05]"
       animate={
         isGrowing
           ? {
@@ -430,11 +426,11 @@ function BuildStreakBar({
 
   const barColor =
     rate >= 80
-      ? "#00FFA3"
+      ? "var(--color-accent-emerald)"
       : rate >= 50
-        ? "#FFB800"
+        ? "var(--color-agent-ux)"
         : rate > 0
-          ? "#EF4444"
+          ? "var(--color-severity-critical)"
           : "rgba(255,255,255,0.1)";
 
   const barGlow =
@@ -455,7 +451,7 @@ function BuildStreakBar({
             <span className="text-status-live">✓</span>
             <SpringInt
               value={pass}
-              color="#00FFA3"
+              color="var(--color-accent-emerald)"
               className="font-mono text-[10px] font-bold tabular-nums"
             />
           </span>
@@ -463,7 +459,7 @@ function BuildStreakBar({
             <span className="text-severity-critical">✗</span>
             <SpringInt
               value={fail}
-              color="#EF4444"
+              color="var(--color-severity-critical)"
               className="font-mono text-[10px] font-bold tabular-nums"
             />
           </span>
@@ -587,7 +583,7 @@ function CompactionIndicator({
           className="h-3 w-3"
           viewBox="0 0 24 24"
           fill="none"
-          stroke={isCompacting ? "#00E5FF" : "#90A4AE"}
+          stroke={isCompacting ? "var(--color-accent)" : "var(--color-text-secondary)"}
           strokeWidth={2}
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -598,7 +594,7 @@ function CompactionIndicator({
         </motion.svg>
         <SpringInt
           value={count}
-          color={isCompacting ? "#00E5FF" : "#90A4AE"}
+          color={isCompacting ? "var(--color-accent)" : "var(--color-text-secondary)"}
           className="font-mono text-base font-bold tabular-nums"
         />
       </div>
@@ -639,8 +635,7 @@ function AgentLeaderboard({ turns }: { turns: Record<string, number> }) {
               {i === 0 && t > 0 ? "👑" : ""}
             </span>
             <div
-              className="h-1 rounded-full flex-1 overflow-hidden"
-              style={{ background: "rgba(255,255,255,0.03)" }}
+              className="h-1 rounded-full flex-1 overflow-hidden bg-white/[0.03]"
             >
               <motion.div
                 className="h-full rounded-full"
@@ -830,7 +825,7 @@ export function TokenUsageDisplay({
         )}
       </AnimatePresence>
 
-      <div className="relative flex items-center gap-4 px-4 py-2.5">
+      <div className="relative flex items-center gap-3 px-3 py-2.5 overflow-x-auto scrollbar-none md:gap-4 md:px-4">
         {/* ── Token Section with Phase Tabs ── */}
         <div className="flex flex-col gap-1.5 flex-1 min-w-0 overflow-hidden">
           {/* Phase tabs */}
@@ -846,6 +841,7 @@ export function TokenUsageDisplay({
             }).map((phase) => {
               const isActive = activePhase === phase.id;
               // Get phase color from the first role's visuals
+              // Fallback uses hex because phaseColor is concatenated with hex opacity suffixes
               const phaseColor = phase.roles ? getTokenMeta(phase.roles[0]).color : "#00E5FF";
               return (
                 <button
@@ -929,7 +925,7 @@ export function TokenUsageDisplay({
             {/* Empty state when no agents have activity */}
             {!hasAnyActivity && (
               <div className="flex items-center gap-2 py-1 text-text-muted/50">
-                <span className="text-[10px] uppercase tracking-widest">No agent activity yet</span>
+                <span className="text-[10px] uppercase tracking-widest">Token bars appear when agents start running</span>
               </div>
             )}
           </div>
@@ -939,7 +935,7 @@ export function TokenUsageDisplay({
         <div className="flex flex-col items-center gap-0.5 shrink-0">
           <SpringNumber
             value={totalTokens}
-            color={totalTokens > 0 ? "#00E5FF" : "var(--color-text-muted)"}
+            color={totalTokens > 0 ? "var(--color-accent)" : "var(--color-text-muted)"}
             className="font-mono text-sm font-bold tabular-nums"
           />
           <span className="text-[7px] uppercase tracking-[0.15em] text-text-muted">
@@ -948,10 +944,10 @@ export function TokenUsageDisplay({
         </div>
 
         {/* ── Divider ── */}
-        <div className="h-10 w-px shrink-0 bg-white/[0.06]" />
+        <div className="hidden md:block h-10 w-px shrink-0 bg-white/[0.06]" />
 
         {/* ── Gamification Stats ── */}
-        <div className="flex items-center gap-3 shrink-0">
+        <div className="hidden md:flex items-center gap-3 shrink-0">
           {/* Build streak */}
           <BuildStreakBar
             pass={metrics.buildsPass ?? 0}
@@ -968,7 +964,7 @@ export function TokenUsageDisplay({
             }
             label="Tools"
             value={totalToolCalls}
-            color="#B026FF"
+            color="var(--color-accent-violet)"
             glowColor="rgba(176, 38, 255, 0.3)"
             prevValue={prevMetrics.toolCalls}
           />
@@ -981,7 +977,7 @@ export function TokenUsageDisplay({
             }
             label="Resolved"
             value={metrics.tasksResolved ?? 0}
-            color="#00FFA3"
+            color="var(--color-accent-emerald)"
             glowColor="rgba(0, 255, 163, 0.3)"
             prevValue={prevMetrics.tasksResolved}
           />

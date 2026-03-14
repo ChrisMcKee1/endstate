@@ -17,7 +17,7 @@ const RARITY_META: Record<
     bg: "rgba(144, 164, 174, 0.04)",
     shimmer: "rgba(144, 164, 174, 0.08)",
     glow: "rgba(144, 164, 174, 0.15)",
-    labelColor: "#90A4AE",
+    labelColor: "var(--color-text-secondary)",
   },
   [AWARD_RARITIES.UNCOMMON]: {
     label: "Uncommon",
@@ -25,7 +25,7 @@ const RARITY_META: Record<
     bg: "rgba(0, 255, 163, 0.04)",
     shimmer: "rgba(0, 255, 163, 0.1)",
     glow: "rgba(0, 255, 163, 0.2)",
-    labelColor: "#00FFA3",
+    labelColor: "var(--color-accent-emerald)",
   },
   [AWARD_RARITIES.RARE]: {
     label: "Rare",
@@ -33,7 +33,7 @@ const RARITY_META: Record<
     bg: "rgba(0, 229, 255, 0.05)",
     shimmer: "rgba(0, 229, 255, 0.12)",
     glow: "rgba(0, 229, 255, 0.25)",
-    labelColor: "#00E5FF",
+    labelColor: "var(--color-accent)",
   },
   [AWARD_RARITIES.EPIC]: {
     label: "Epic",
@@ -41,7 +41,7 @@ const RARITY_META: Record<
     bg: "rgba(176, 38, 255, 0.06)",
     shimmer: "rgba(176, 38, 255, 0.15)",
     glow: "rgba(176, 38, 255, 0.3)",
-    labelColor: "#B026FF",
+    labelColor: "var(--color-accent-violet)",
   },
   [AWARD_RARITIES.LEGENDARY]: {
     label: "Legendary",
@@ -49,7 +49,7 @@ const RARITY_META: Record<
     bg: "rgba(255, 184, 0, 0.07)",
     shimmer: "rgba(255, 184, 0, 0.18)",
     glow: "rgba(255, 184, 0, 0.35)",
-    labelColor: "#FFB800",
+    labelColor: "var(--color-agent-ux)",
   },
 };
 
@@ -146,12 +146,7 @@ function AwardCard({ award, index }: { award: Award; index: number }) {
             </span>
             {isAI && (
               <span
-                className="rounded-full px-1.5 py-px text-[7px] font-semibold uppercase tracking-widest"
-                style={{
-                  background: "rgba(176, 38, 255, 0.12)",
-                  color: "#B026FF",
-                  border: "1px solid rgba(176, 38, 255, 0.2)",
-                }}
+                className="rounded-full px-1.5 py-px text-[7px] font-semibold uppercase tracking-widest bg-accent-violet/12 text-accent-violet border border-accent-violet/20"
               >
                 AI
               </span>
@@ -265,10 +260,10 @@ export function AwardsPanel() {
   return (
     <div className="flex h-full flex-col overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-border-subtle px-3 py-2.5 shrink-0">
+      <div className="flex items-center justify-between border-b border-border-subtle px-4 py-3 shrink-0">
         <div className="flex items-center gap-2">
           <span className="text-sm">🏆</span>
-          <span className="text-[10px] font-semibold uppercase tracking-widest text-text-muted">
+          <span className="text-[10px] uppercase tracking-widest text-text-muted">
             Awards
           </span>
           {totalCount > 0 && (
@@ -318,7 +313,7 @@ export function AwardsPanel() {
                   <span
                     className="text-[8px] font-bold uppercase tracking-[0.15em]"
                     style={{
-                      color: RARITY_META[rarity]?.labelColor ?? "#90A4AE",
+                      color: RARITY_META[rarity]?.labelColor ?? "var(--color-text-secondary)",
                     }}
                   >
                     {RARITY_META[rarity]?.label ?? rarity}

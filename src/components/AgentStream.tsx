@@ -230,6 +230,7 @@ export function AgentStream({ entries, activeAgent }: AgentStreamProps) {
                         ? "text-severity-critical"
                         : "text-text-primary/90"
                 }`}
+                {...(isError ? { role: "alert" } : {})}
               >
                 {entry.type === "message" && !isUserMessage ? (
                   <MarkdownRenderer content={entry.content} compact />
@@ -252,7 +253,7 @@ export function AgentStream({ entries, activeAgent }: AgentStreamProps) {
   };
 
   return (
-    <div className="relative flex h-full flex-col scanlines vignette">
+    <div className="relative flex h-full flex-col scanlines vignette" role="log" aria-label="Agent activity stream" aria-live="polite">
       {/* Scroll container */}
       <div
         ref={scrollRef}

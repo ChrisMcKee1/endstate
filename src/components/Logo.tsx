@@ -2,6 +2,10 @@
 
 import { motion } from "framer-motion";
 
+// Brand logo SVG — hex colors are intentional for precise SVG rendering.
+// These correspond to design tokens: accent (#00E5FF), accent-violet (#B026FF),
+// accent-emerald (#00FFA3), surface (#14151F), text-primary (#F8FAFC), text-secondary (#94A3B8).
+
 // Draw animation: each path segment draws itself in sequence
 const DRAW_TRANSITION = { duration: 1.2, ease: "easeInOut" as const };
 const DRAW_DELAY_STEP = 0.15;

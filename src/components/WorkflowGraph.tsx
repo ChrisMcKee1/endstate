@@ -16,13 +16,12 @@ const DOMAIN_LABELS: Record<string, string> = {
 };
 
 // Domain colors are centralized in globals.css as --color-domain-* vars.
-// These hex values must match for SVG rendering (SVG can't resolve CSS vars).
-// Source of truth: globals.css → --color-domain-*
+// These use CSS vars so SVG rendering stays in sync with the design system.
 const DOMAIN_COLORS: Record<string, string> = {
-  [DOMAINS.UI]: "#00E5FF",
-  [DOMAINS.BACKEND]: "#B026FF",
-  [DOMAINS.DATABASE]: "#FFD700",
-  [DOMAINS.DOCS]: "#FF69B4",
+  [DOMAINS.UI]: "var(--color-domain-ui)",
+  [DOMAINS.BACKEND]: "var(--color-domain-backend)",
+  [DOMAINS.DATABASE]: "var(--color-domain-database)",
+  [DOMAINS.DOCS]: "var(--color-domain-docs)",
 };
 
 const NODE_RADIUS = 20;
@@ -41,6 +40,8 @@ const BREATHE_TRANSITION = {
 const SPRING = { type: "spring" as const, stiffness: 200, damping: 20 };
 
 // Cycle arc colors — clockwise flow
+// Intentional: these purple/indigo shades are unique to the cycle visualization
+// and don't map to existing agent/domain tokens.
 const LOOP_COLOR_RIGHT = "#A855F7"; // violet — Explorer → UX (down the right)
 const LOOP_COLOR_LEFT = "#6366F1";  // indigo — UX → Explorer (up the left)
 const LOOP_MARGIN = 140; // Must be large — cubic bezier peaks at ~75% of control point distance from center
@@ -260,8 +261,7 @@ export function WorkflowGraph({
 
   return (
     <div
-      className="flex h-full w-full items-center justify-center overflow-auto"
-      style={{ background: "rgba(20, 21, 31, 0.5)" }}
+      className="flex h-full w-full items-center justify-center overflow-auto bg-surface/50"
     >
       <svg
         viewBox={svgViewBox}
@@ -422,7 +422,7 @@ export function WorkflowGraph({
 
           return (
             <g key={`edge-${i}`}>
-              <path d={pathD} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth={1} />
+              <path d={pathD} fill="none" stroke="var(--color-border-subtle)" strokeWidth={1} />
               <motion.path
                 d={pathD}
                 fill="none"
@@ -459,8 +459,8 @@ export function WorkflowGraph({
               transition={SPRING}
             >
               <rect x={width / 2 - 22} y={4} width={44} height={18} rx={9}
-                fill="rgba(20, 21, 31, 0.8)" stroke="rgba(255,255,255,0.08)" strokeWidth={0.5} />
-              <text x={width / 2} y={16} textAnchor="middle" fill="#94A3B8"
+                fill="var(--color-surface)" stroke="var(--color-border-subtle)" strokeWidth={0.5} />
+              <text x={width / 2} y={16} textAnchor="middle" fill="var(--color-text-secondary)"
                 fontSize={9} fontFamily="var(--font-code)">
                 Cycle {cycle}
               </text>

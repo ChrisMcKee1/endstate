@@ -30,6 +30,7 @@ export function SteeringBar({ status, onSteered, onNewVision }: SteeringBarProps
   const [message, setMessage] = useState("");
   const [sending, setSending] = useState(false);
   const [lastSent, setLastSent] = useState<string | null>(null);
+  const [justSent, setJustSent] = useState(false);
 
   const isRunning = status === PIPELINE_STATUSES.RUNNING;
 
@@ -56,6 +57,8 @@ export function SteeringBar({ status, onSteered, onNewVision }: SteeringBarProps
         if (res.ok) {
           setLastSent(text.trim());
           setMessage("");
+          setJustSent(true);
+          setTimeout(() => setJustSent(false), 600);
           onSteered?.(text.trim());
         }
       } catch {
@@ -77,6 +80,8 @@ export function SteeringBar({ status, onSteered, onNewVision }: SteeringBarProps
         onNewVision?.(text.trim());
         setLastSent(text.trim());
         setMessage("");
+        setJustSent(true);
+        setTimeout(() => setJustSent(false), 600);
       } finally {
         setSending(false);
       }
@@ -97,8 +102,8 @@ export function SteeringBar({ status, onSteered, onNewVision }: SteeringBarProps
 
   return (
     <div className="glass-panel border-t-0 shadow-[0_-4px_24px_rgba(0,0,0,0.4)]">
-      {/* Quick chips */}
-      <div className="flex gap-2 overflow-x-auto px-4 pt-3 pb-2">
+      {/* Quick chips — horizontally scrollable on all sizes */}
+      <div className="flex gap-2 overflow-x-auto px-3 md:px-4 pt-3 pb-2 scrollbar-none">
         {!isRunning && (
           <span className="flex shrink-0 items-center text-[10px] uppercase tracking-widest text-accent/60">
             Next vision
@@ -111,7 +116,7 @@ export function SteeringBar({ status, onSteered, onNewVision }: SteeringBarProps
             whileTap={{ scale: 0.96 }}
             onClick={() => isRunning ? send(chip.message) : submitVision(chip.message)}
             disabled={sending}
-            className="shrink-0 rounded-full border border-border-active bg-white/[0.04] px-3.5 py-1.5 text-[11px] font-medium text-text-secondary transition-colors hover:border-accent/30 hover:text-accent disabled:opacity-50"
+            className="shrink-0 rounded-full border border-border-active bg-white/[0.04] px-3 py-1.5 text-[11px] font-medium text-text-secondary transition-colors hover:border-accent/30 hover:text-accent disabled:opacity-50 md:px-3.5"
           >
             {chip.label}
           </motion.button>
@@ -121,7 +126,7 @@ export function SteeringBar({ status, onSteered, onNewVision }: SteeringBarProps
       {/* Input row */}
       <form
         onSubmit={handleSubmit}
-        className="flex items-center gap-3 px-4 pb-3"
+        className="flex items-center gap-2 px-3 pb-3 md:gap-3 md:px-4"
       >
         <div className="relative flex-1">
           <input
@@ -135,7 +140,7 @@ export function SteeringBar({ status, onSteered, onNewVision }: SteeringBarProps
             }
             aria-label={isRunning ? "Pipeline steering message" : "New vision description"}
             disabled={sending}
-            className="w-full rounded-full border border-border-active bg-void/60 px-5 py-3 font-mono text-sm text-text-primary placeholder:text-text-muted/40 transition-shadow focus:border-accent/40 focus:shadow-[inset_0_0_20px_rgba(0,229,255,0.06),0_0_16px_rgba(0,229,255,0.08)] focus:outline-none disabled:opacity-30"
+            className="w-full rounded-full border border-border-active bg-void/60 px-4 py-2.5 font-mono text-sm text-text-primary placeholder:text-text-muted/40 transition-shadow focus:border-accent/40 focus:shadow-[inset_0_0_20px_rgba(0,229,255,0.06),0_0_16px_rgba(0,229,255,0.08)] focus:outline-none disabled:opacity-30 md:px-5 md:py-3"
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
@@ -162,11 +167,14 @@ export function SteeringBar({ status, onSteered, onNewVision }: SteeringBarProps
           disabled={!message.trim() || sending}
           whileHover={{ scale: 1.08, boxShadow: isRunning ? "0 0 20px rgba(0, 229, 255, 0.4)" : "0 0 20px rgba(0, 255, 163, 0.4)" }}
           whileTap={{ scale: 0.92 }}
+          animate={justSent ? { scale: [1, 1.15, 1], boxShadow: ["0 0 0px rgba(0,255,163,0)", "0 0 24px rgba(0,255,163,0.5)", "0 0 0px rgba(0,255,163,0)"] } : {}}
           transition={{ type: "spring", stiffness: 400, damping: 17 }}
           className={`flex h-11 w-11 items-center justify-center rounded-full transition-colors disabled:opacity-20 ${
-            isRunning
-              ? "bg-accent/15 text-accent hover:bg-accent/25"
-              : "bg-status-live/15 text-status-live hover:bg-status-live/25"
+            justSent
+              ? "bg-status-live/25 text-status-live"
+              : isRunning
+                ? "bg-accent/15 text-accent hover:bg-accent/25"
+                : "bg-status-live/15 text-status-live hover:bg-status-live/25"
           }`}
         >
           {sending ? (

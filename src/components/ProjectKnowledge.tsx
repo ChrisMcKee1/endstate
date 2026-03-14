@@ -54,7 +54,7 @@ export function ProjectKnowledge({ projectPath, isRunning }: ProjectKnowledgePro
     } catch (err) {
       // Don't surface abort errors — they're expected on cleanup
       if (err instanceof DOMException && err.name === "AbortError") return;
-      setError("Failed to load knowledge base");
+      setError("Couldn\u2019t load project knowledge. Check your connection and try refreshing.");
     }
   }, [projectPath]);
 
@@ -97,7 +97,7 @@ export function ProjectKnowledge({ projectPath, isRunning }: ProjectKnowledgePro
 
   const saveContent = useCallback(() => {
     if (!editContent.trim()) {
-      setError("Content cannot be empty");
+      setError("Knowledge content can\u2019t be empty. Write some notes about your project or press Esc to cancel.");
       return;
     }
     startSaveTransition(async () => {
@@ -116,7 +116,7 @@ export function ProjectKnowledge({ projectPath, isRunning }: ProjectKnowledgePro
         setLastUpdated(new Date().toISOString());
         setIsEditing(false);
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Save failed");
+        setError(err instanceof Error ? err.message : "Couldn\u2019t save \u2014 try again or check your connection");
       }
     });
   }, [editContent, projectPath]);
@@ -135,7 +135,7 @@ export function ProjectKnowledge({ projectPath, isRunning }: ProjectKnowledgePro
         setShowDeleteConfirm(false);
         setIsEditing(false);
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Delete failed");
+        setError(err instanceof Error ? err.message : "Couldn\u2019t delete \u2014 try again or check your connection");
       }
     });
   }, [projectPath]);
@@ -208,8 +208,8 @@ export function ProjectKnowledge({ projectPath, isRunning }: ProjectKnowledgePro
             <p className="text-xs font-medium text-text-secondary">No project knowledge yet</p>
             <p className="mt-1 text-[10px] text-text-muted">
               {isRunning
-                ? "The Researcher agent will populate this automatically..."
-                : "Start the pipeline or add knowledge manually"}
+                ? "The Researcher agent is analyzing your project — this will populate automatically"
+                : "Start the pipeline to auto-generate, or click Add above to write your own"}
             </p>
           </div>
           {isRunning && (

@@ -126,6 +126,7 @@ export function SettingsPanel({ config, onClose, onSave }: SettingsPanelProps) {
           className="glass-panel flex h-full w-[400px] max-w-full flex-col rounded-l-2xl border-l border-border-subtle"
           role="dialog"
           aria-modal="true"
+          aria-label="Settings"
         >
           {/* Header */}
           <div className="flex items-center justify-between border-b border-border-subtle px-4 py-3">
@@ -380,6 +381,7 @@ export function SettingsPanel({ config, onClose, onSave }: SettingsPanelProps) {
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0 }}
                   className="mb-2 text-xs text-severity-critical"
+                  role="alert"
                 >
                   {error}
                 </motion.p>
@@ -447,7 +449,7 @@ function ToggleRow({
       <motion.div
         className="relative h-5 w-9 rounded-full"
         animate={{
-          backgroundColor: checked ? "rgb(0, 229, 255)" : "rgba(255,255,255,0.08)",
+          backgroundColor: checked ? "var(--color-accent)" : "rgba(255,255,255,0.08)",
         }}
         transition={SPRING}
       >

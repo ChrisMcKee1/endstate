@@ -266,7 +266,7 @@ export function SetupWizard() {
         </motion.div>
 
         {/* Step indicator */}
-        <div className="mb-8 flex items-center justify-center gap-1">
+        <div className="mb-8 flex flex-wrap items-center justify-center gap-1">
           {STEPS.map((s, i) => (
             <div key={i} className="flex items-center">
               <motion.button
@@ -313,7 +313,7 @@ export function SetupWizard() {
                 <motion.div
                   className="mx-1 h-px w-6"
                   animate={{
-                    backgroundColor: i < step ? "rgba(0,229,255,0.5)" : "rgba(255,255,255,0.04)",
+                    backgroundColor: i < step ? "rgba(0,229,255,0.5)" : "var(--color-border-subtle)",
                   }}
                   transition={{ duration: 0.3 }}
                 />
@@ -333,7 +333,7 @@ export function SetupWizard() {
               animate="center"
               exit="exit"
               transition={{ type: "spring", stiffness: 300, damping: 28 }}
-              className="max-h-[60vh] overflow-y-auto p-6"
+              className="max-h-[60vh] overflow-y-auto p-4 sm:p-6"
             >
               {/* Step 0: Project Path */}
               {step === 0 && (
@@ -779,7 +779,7 @@ export function SetupWizard() {
                     transition={SPRING}
                     onClick={handleLaunch}
                     disabled={launching}
-                    className="group relative w-full overflow-hidden rounded-xl bg-gradient-to-r from-accent to-[#00B8D4] py-3.5 text-sm font-bold uppercase tracking-wider text-void transition-all disabled:opacity-60"
+                    className="group relative w-full overflow-hidden rounded-xl bg-gradient-to-r from-accent to-accent-dim py-3.5 text-sm font-bold uppercase tracking-wider text-void transition-all disabled:opacity-60"
                   >
                     {/* Pulsing glow ring when ready */}
                     {!launching && (

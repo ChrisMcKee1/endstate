@@ -109,6 +109,7 @@ export function StartNewModal({ tasks, onResume, onNewVision, onClose }: StartNe
         className="glass-panel w-full max-w-md rounded-2xl"
         role="dialog"
         aria-modal="true"
+        aria-label="Start pipeline"
       >
         <AnimatePresence mode="wait">
           {/* ── Choose view: resume or new ────────────────────────────── */}

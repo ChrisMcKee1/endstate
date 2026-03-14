@@ -119,6 +119,7 @@ export function AgentChatPanel({
         className="glass-panel flex h-full w-[480px] flex-col rounded-l-2xl border-r-0 shadow-elevation-3"
         role="dialog"
         aria-modal="true"
+        aria-label={`${meta.label} agent chat`}
       >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-border-subtle px-5 py-3.5">
@@ -242,6 +243,7 @@ export function AgentChatPanel({
                               ? "text-severity-critical"
                               : "text-text-primary/90"
                         }`}
+                        {...(isError ? { role: "alert" } : {})}
                       >
                         {entry.type === "message" ? (
                           <MarkdownRenderer content={entry.content} compact />

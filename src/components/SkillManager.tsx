@@ -87,8 +87,7 @@ export function SkillManager({ skills, onChange, projectPath }: SkillManagerProp
         <motion.button
           onClick={handleScan}
           disabled={scanning || !projectPath}
-          className="flex items-center gap-1.5 rounded-xl border border-white/[0.06] px-3 py-1.5 text-[10px] font-medium uppercase tracking-wider text-text-secondary backdrop-blur-sm transition-colors hover:border-accent/30 hover:text-accent disabled:opacity-40"
-          style={{ background: "rgba(10, 11, 16, 0.5)" }}
+          className="flex items-center gap-1.5 rounded-xl border border-white/[0.06] px-3 py-1.5 text-[10px] font-medium uppercase tracking-wider text-text-secondary backdrop-blur-sm transition-colors hover:border-accent/30 hover:text-accent disabled:opacity-40 bg-void/50"
           whileTap={{ scale: 0.97 }}
           transition={SPRING}
         >
@@ -101,9 +100,8 @@ export function SkillManager({ skills, onChange, projectPath }: SkillManagerProp
         <motion.button
           onClick={() => fileInputRef.current?.click()}
           disabled={importing}
-          className="flex items-center gap-1.5 rounded-xl border border-white/[0.06] px-3 py-1.5 text-[10px] font-medium uppercase tracking-wider text-text-secondary backdrop-blur-sm transition-colors hover:border-status-live/30 hover:text-status-live disabled:opacity-40"
+          className="flex items-center gap-1.5 rounded-xl border border-white/[0.06] px-3 py-1.5 text-[10px] font-medium uppercase tracking-wider text-text-secondary backdrop-blur-sm transition-colors hover:border-status-live/30 hover:text-status-live disabled:opacity-40 bg-void/50"
           style={{
-            background: "rgba(10, 11, 16, 0.5)",
             boxShadow: "0 0 12px rgba(0, 255, 163, 0.05)",
           }}
           whileTap={{ scale: 0.97 }}
@@ -132,10 +130,7 @@ export function SkillManager({ skills, onChange, projectPath }: SkillManagerProp
         {skills.length === 0 ? (
           <motion.div
             key="empty"
-            className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-white/[0.08] px-6 py-10 text-center"
-            style={{
-              background: "linear-gradient(135deg, rgba(0,229,255,0.03) 0%, rgba(176,38,255,0.03) 100%)",
-            }}
+            className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-white/[0.08] px-6 py-10 text-center bg-[linear-gradient(135deg,var(--color-glass-cyan),rgba(176,38,255,0.03))]"
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.95 }}
@@ -154,7 +149,7 @@ export function SkillManager({ skills, onChange, projectPath }: SkillManagerProp
                 key={skill.id}
                 className="rounded-xl border border-white/[0.06] backdrop-blur-sm"
                 style={{
-                  background: skill.enabled ? "rgba(20, 21, 31, 0.6)" : "rgba(10, 11, 16, 0.4)",
+                  background: skill.enabled ? "var(--color-surface)" : "var(--color-void)",
                   opacity: skill.enabled ? 1 : 0.6,
                 }}
                 initial={{ opacity: 0, y: 12 }}

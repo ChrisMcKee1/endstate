@@ -116,15 +116,14 @@ export function CustomizationPanel({
 
       {/* Save footer */}
       <div
-        className="shrink-0 border-t border-white/[0.04] p-4"
-        style={{ background: "rgba(20, 21, 31, 0.5)" }}
+        className="shrink-0 border-t border-white/[0.04] p-4 bg-surface/50"
       >
         <motion.button
           onClick={onSave}
           disabled={saving}
           className="w-full rounded-xl py-2.5 text-xs font-bold uppercase tracking-wider text-void transition-opacity disabled:opacity-50"
           style={{
-            background: "linear-gradient(135deg, #00FFA3 0%, #00E5FF 100%)",
+            background: "linear-gradient(135deg, var(--color-accent-emerald) 0%, var(--color-accent) 100%)",
             boxShadow: "0 0 20px rgba(0, 255, 163, 0.15)",
           }}
           whileTap={{ scale: 0.98 }}

@@ -317,7 +317,7 @@ export function TaskList({ tasks, onSelectTask, onRefreshTasks, isRunning = fals
   }, [addTitle, addSeverity, addComponent, addDetail, onRefreshTasks]);
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full flex-col" role="region" aria-label="Task list">
       {/* Summary bar */}
       <div className="flex items-center gap-3 border-b border-border-subtle px-3 py-2">
         <div className="flex items-center gap-1.5">
@@ -345,6 +345,7 @@ export function TaskList({ tasks, onSelectTask, onRefreshTasks, isRunning = fals
             onClick={() => setShowAddForm(!showAddForm)}
             className="rounded-md p-1 text-accent transition-colors hover:bg-accent/10"
             title="Add task"
+            aria-label="Add task"
           >
             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
@@ -363,6 +364,7 @@ export function TaskList({ tasks, onSelectTask, onRefreshTasks, isRunning = fals
                 disabled={deleteLoading}
                 className="rounded-md p-1 text-severity-critical transition-colors hover:bg-severity-critical/10 disabled:opacity-40"
                 title={`Delete ${selectedIds.size} selected`}
+                aria-label={`Delete ${selectedIds.size} selected tasks`}
               >
                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
@@ -374,7 +376,7 @@ export function TaskList({ tasks, onSelectTask, onRefreshTasks, isRunning = fals
       </div>
 
       {/* Filters */}
-      <div className="flex items-center gap-2 border-b border-border-subtle px-3 py-1.5" style={{ background: "rgba(20, 21, 31, 0.4)" }}>
+      <div className="flex items-center gap-2 border-b border-border-subtle px-3 py-1.5 bg-surface/40">
         <select
           value={sortBy}
           onChange={(e) => setSortBy(e.target.value as SortKey)}
@@ -411,7 +413,7 @@ export function TaskList({ tasks, onSelectTask, onRefreshTasks, isRunning = fals
       </div>
 
       {/* Domain filter chips */}
-      <div className="flex items-center gap-1.5 border-b border-border-subtle px-3 py-1.5" style={{ background: "rgba(20, 21, 31, 0.3)" }}>
+      <div className="flex items-center gap-1.5 border-b border-border-subtle px-3 py-1.5 bg-surface/30">
         <span className="text-[9px] uppercase tracking-widest text-text-muted/60 shrink-0">Domain</span>
         {ALL_DOMAINS.map((domain) => {
           const style = DOMAIN_STYLES[domain];
@@ -442,7 +444,7 @@ export function TaskList({ tasks, onSelectTask, onRefreshTasks, isRunning = fals
 
       {/* Cycle filter chips */}
       {availableCycles.length > 1 && (
-        <div className="flex items-center gap-1.5 border-b border-border-subtle px-3 py-1.5" style={{ background: "rgba(20, 21, 31, 0.25)" }}>
+        <div className="flex items-center gap-1.5 border-b border-border-subtle px-3 py-1.5 bg-surface/25">
           <span className="text-[9px] uppercase tracking-widest text-text-muted/60 shrink-0">Cycle</span>
           {availableCycles.map((cycle) => {
             const isActive = filterCycles.has(cycle);
@@ -483,7 +485,7 @@ export function TaskList({ tasks, onSelectTask, onRefreshTasks, isRunning = fals
             transition={SPRING}
             className="overflow-hidden border-b border-border-subtle"
           >
-            <div className="space-y-2 p-3" style={{ background: "rgba(20, 21, 31, 0.5)" }}>
+            <div className="space-y-2 p-3 bg-surface/50">
               <input
                 value={addTitle}
                 onChange={(e) => setAddTitle(e.target.value)}
@@ -549,11 +551,17 @@ export function TaskList({ tasks, onSelectTask, onRefreshTasks, isRunning = fals
               className="flex flex-col items-center justify-center gap-3 p-10"
             >
               <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-accent/5 to-agent-violet/5">
-                <span className="text-3xl opacity-50">📋</span>
+                <span className="text-3xl opacity-50">{tasks.length > 0 ? "🔍" : "📋"}</span>
               </div>
-              <span className="text-xs text-text-muted">No tasks yet</span>
+              <span className="text-xs text-text-secondary">
+                {tasks.length > 0 ? "No tasks match your filters" : "No issues found yet"}
+              </span>
               <span className="text-[10px] text-text-muted/50">
-                Tasks will appear as agents discover issues
+                {tasks.length > 0
+                  ? "Try adjusting the severity, status, or domain filters above"
+                  : isRunning
+                    ? "Agents are exploring — tasks will appear as issues are discovered"
+                    : "Start the pipeline to begin discovering issues"}
               </span>
             </motion.div>
           ) : (
@@ -564,12 +572,13 @@ export function TaskList({ tasks, onSelectTask, onRefreshTasks, isRunning = fals
                 return (
                   <motion.div
                     key={task.id}
+                    layout
                     variants={{
                       hidden: { opacity: 0, x: -12 },
                       show: { opacity: 1, x: 0 },
                     }}
                     transition={SPRING}
-                    className={`group flex w-full items-start gap-2 border-b border-border-subtle/50 px-3 py-2.5 ${
+                    className={`group flex w-full items-start gap-2 border-b border-border-subtle/50 px-3 py-2.5 transition-colors duration-300 ${
                       isSelected ? "bg-accent/5" : ""
                     }`}
                   >
@@ -577,6 +586,7 @@ export function TaskList({ tasks, onSelectTask, onRefreshTasks, isRunning = fals
                     <button
                       onClick={() => toggleSelect(task.id)}
                       className="mt-1 shrink-0"
+                      aria-label={isSelected ? `Deselect task ${task.id}` : `Select task ${task.id}`}
                     >
                       <span className={`flex h-4 w-4 items-center justify-center rounded border transition-colors ${
                         isSelected

@@ -13,6 +13,8 @@ export const THEMES = {
 
 export type Theme = (typeof THEMES)[keyof typeof THEMES];
 
+// Theme preview colors — each theme has its own accent that differs from the
+// base design tokens. These hex values are the identity of each theme variant.
 const THEME_META: Record<Theme, { label: string; description: string; color: string }> = {
   [THEMES.HOLOGRAPHIC]: { label: "Holographic", description: "Default — cyber cyan dark mode", color: "#00E5FF" },
   [THEMES.PIP_BOY]: { label: "Pip-Boy", description: "Monochrome green terminal", color: "#20c20e" },

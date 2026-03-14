@@ -118,6 +118,7 @@ export function Dashboard({ config }: DashboardProps) {
   const [showNewProjectConfirm, setShowNewProjectConfirm] = useState(false);
   const [showStartNewModal, setShowStartNewModal] = useState(false);
   const [selectedAgent, setSelectedAgent] = useState<AgentRole | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const [completedAgents, setCompletedAgents] = useState<AgentRole[]>([]);
 
   const entryCounter = useRef(0);
@@ -552,28 +553,28 @@ export function Dashboard({ config }: DashboardProps) {
   }, [currentConfig]);
 
   return (
-    <div className="noise relative flex h-screen flex-col overflow-hidden bg-void">
+    <div id="main-content" className="noise relative flex h-screen flex-col overflow-hidden bg-void">
       {/* ── Header ──────────────────────────────────────────────────────── */}
-      <header className="glass-panel relative z-10 flex h-14 shrink-0 items-center justify-between border-t-0 border-x-0 px-5 shadow-elevation-2">
-        <div className="flex items-center gap-4">
-          <h1 className="text-sm font-bold uppercase tracking-[0.15em] text-accent">
+      <header className="glass-panel relative z-10 flex h-14 shrink-0 items-center justify-between border-t-0 border-x-0 px-3 md:px-5 shadow-elevation-2">
+        <div className="flex items-center gap-2 md:gap-4 min-w-0">
+          <h1 className="text-sm font-bold uppercase tracking-[0.15em] text-accent shrink-0">
             Endstate
           </h1>
-          <span className="text-xs text-text-muted">
+          <span className="hidden md:inline truncate max-w-[160px] text-xs text-text-muted" title={currentConfig.projectPath}>
             {currentConfig.projectPath.split(/[\\/]/).pop()}
           </span>
-          <span className="rounded-full bg-accent/10 px-2.5 py-0.5 font-mono text-[10px] text-accent shadow-[0_0_12px_rgba(0,229,255,0.1)]">
+          <span className="hidden lg:inline truncate max-w-[200px] rounded-full bg-accent/10 px-2.5 py-0.5 font-mono text-[10px] text-accent shadow-[0_0_12px_rgba(0,229,255,0.1)]" title={currentConfig.model}>
             {currentConfig.model}
           </span>
         </div>
 
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2 md:gap-4">
           <ContextMeter
             usage={contextUsage}
             isCompacting={isCompacting}
           />
 
-          <div className="flex items-center gap-2">
+          <div className="hidden sm:flex items-center gap-2">
             <span className="text-[10px] uppercase tracking-widest text-text-muted">
               {pipelineState.currentCycle === 0 && isRunning ? "Setup" : "Cycle"}
             </span>
@@ -589,7 +590,7 @@ export function Dashboard({ config }: DashboardProps) {
               : pipelineState.activeAgent ? [pipelineState.activeAgent] : [];
             if (agents.length === 0) return null;
             return (
-              <div className="flex items-center gap-2 overflow-x-auto">
+              <div className="hidden md:flex items-center gap-2 overflow-x-auto">
                 {agents.map((agent) => {
                   const vis = getAgentVisual(agent);
                   return (
@@ -610,19 +611,40 @@ export function Dashboard({ config }: DashboardProps) {
             );
           })()}
 
-          <div className="flex items-center gap-1.5">
-            {pipelineState.status === PIPELINE_STATUSES.RUNNING ? (
+          <div className="flex items-center gap-1.5" aria-live="polite" aria-atomic="true">
+            <AnimatePresence mode="wait">
+              {pipelineState.status === PIPELINE_STATUSES.RUNNING ? (
+                <motion.span
+                  key="live-dot"
+                  initial={{ scale: 0, opacity: 0 }}
+                  animate={{ scale: [1, 1.4, 1], opacity: [0.7, 1, 0.7] }}
+                  exit={{ scale: 0, opacity: 0 }}
+                  transition={{ repeat: Infinity, duration: 1.5, ease: "easeInOut" }}
+                  className="h-2 w-2 rounded-full bg-status-live shadow-[0_0_8px_rgba(0,255,163,0.6)]"
+                />
+              ) : (
+                <motion.span
+                  key={`dot-${pipelineState.status}`}
+                  initial={{ scale: 0, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ scale: 0, opacity: 0 }}
+                  transition={{ type: "spring", stiffness: 500, damping: 25 }}
+                  className={`h-2 w-2 rounded-full ${STATUS_COLORS[pipelineState.status] ?? "bg-status-idle"}`}
+                />
+              )}
+            </AnimatePresence>
+            <AnimatePresence mode="wait">
               <motion.span
-                animate={{ scale: [1, 1.4, 1], opacity: [0.7, 1, 0.7] }}
-                transition={{ repeat: Infinity, duration: 1.5, ease: "easeInOut" }}
-                className="h-2 w-2 rounded-full bg-status-live shadow-[0_0_8px_rgba(0,255,163,0.6)]"
-              />
-            ) : (
-              <span className={`h-2 w-2 rounded-full ${STATUS_COLORS[pipelineState.status] ?? "bg-status-idle"}`} />
-            )}
-            <span className="text-[10px] font-semibold uppercase tracking-widest text-text-secondary">
-              {statusLabel}
-            </span>
+                key={statusLabel}
+                initial={{ opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 4 }}
+                transition={{ duration: 0.15, ease: [0.25, 1, 0.5, 1] }}
+                className="text-[10px] font-semibold uppercase tracking-widest text-text-secondary"
+              >
+                {statusLabel}
+              </motion.span>
+            </AnimatePresence>
           </div>
 
           <span aria-live="polite" aria-atomic="true">
@@ -630,13 +652,13 @@ export function Dashboard({ config }: DashboardProps) {
               <button
                 onClick={reconnect}
                 className="flex items-center gap-1.5 rounded-full bg-severity-critical/10 px-2.5 py-0.5 text-[10px] font-medium text-severity-critical transition-colors hover:bg-severity-critical/20"
-                title="Click to reconnect"
+                title="Connection lost — click to reconnect now"
               >
                 <motion.span
                   animate={connectionStatus === "disconnected" ? { opacity: [0.5, 1, 0.5] } : {}}
                   transition={{ repeat: Infinity, duration: 1.5 }}
                 >
-                  {connectionStatus === "error" || connectionStatus === "disconnected" ? "RECONNECTING" : "CONNECTING"}
+                  {connectionStatus === "error" || connectionStatus === "disconnected" ? "RECONNECT" : "CONNECTING"}
                 </motion.span>
                 <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182" />
@@ -762,7 +784,7 @@ export function Dashboard({ config }: DashboardProps) {
         </div>
       </header>
 
-      {/* ── Main Content: Graph (center) + Sidebar (permanent right) ── */}
+      {/* ── Main Content: Graph (center) + Sidebar (collapsible right) ── */}
       <div className="relative z-10 flex min-h-0 flex-1 gap-px">
         {/* Workflow Graph - center stage */}
         <div className="flex-1 min-w-0 overflow-hidden">
@@ -781,8 +803,26 @@ export function Dashboard({ config }: DashboardProps) {
           </ErrorBoundary>
         </div>
 
-        {/* Sidebar - permanently visible */}
-        <div className="flex w-[360px] shrink-0 flex-col overflow-hidden glass-panel border-t-0 border-b-0 border-r-0">
+        {/* Sidebar toggle (visible below lg) */}
+        <button
+          onClick={() => setSidebarOpen((prev) => !prev)}
+          className="absolute right-0 top-2 z-20 flex h-8 w-8 items-center justify-center rounded-l-lg bg-overlay/90 text-text-muted transition-colors hover:text-accent lg:hidden"
+          aria-label={sidebarOpen ? "Hide sidebar" : "Show sidebar"}
+          aria-expanded={sidebarOpen}
+        >
+          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            {sidebarOpen ? (
+              <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+            ) : (
+              <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
+            )}
+          </svg>
+        </button>
+
+        {/* Sidebar - collapsible on narrow, permanent on wide */}
+        <div className={`flex shrink-0 flex-col overflow-hidden glass-panel border-t-0 border-b-0 border-r-0 transition-[width] duration-200 ease-in-out ${
+          sidebarOpen ? "w-[300px] lg:w-[360px]" : "w-0 lg:w-[360px]"
+        }`}>
           {/* Tab bar */}
           <div className="flex shrink-0 border-b border-border-subtle" role="tablist">
             {SIDEBAR_TABS.map((tab) => (
@@ -819,35 +859,46 @@ export function Dashboard({ config }: DashboardProps) {
           {/* Tab content */}
           <div className="flex-1 overflow-hidden" role="tabpanel" id="sidebar-tabpanel" aria-labelledby={`sidebar-tab-${activeTab}`}>
             <ErrorBoundary fallbackTitle="Sidebar Error">
-              {activeTab === "tasks" && (
-                <TaskList
-                  tasks={tasks}
-                  onSelectTask={setSelectedTask}
-                  onRefreshTasks={fetchTasks}
-                  isRunning={isRunning}
-                />
-              )}
-              {activeTab === "ux" && <UxScorecard tasks={tasks} />}
-              {activeTab === "metrics" && (
-                <MetricsBar
-                  pipelineState={pipelineState}
-                  tasks={tasks}
-                />
-              )}
-              {activeTab === "awards" && <AwardsPanel />}
-              {activeTab === "knowledge" && (
-                <ProjectKnowledge
-                  projectPath={currentConfig.projectPath}
-                  isRunning={isRunning}
-                />
-              )}
-              {activeTab === "vision" && (
-                <VisionPanel
-                  inspiration={currentConfig.inspiration}
-                  onUpdate={handleUpdateVision}
-                  isRunning={isRunning}
-                />
-              )}
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={activeTab}
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -6 }}
+                  transition={{ duration: 0.15, ease: [0.25, 1, 0.5, 1] }}
+                  className="h-full"
+                >
+                  {activeTab === "tasks" && (
+                    <TaskList
+                      tasks={tasks}
+                      onSelectTask={setSelectedTask}
+                      onRefreshTasks={fetchTasks}
+                      isRunning={isRunning}
+                    />
+                  )}
+                  {activeTab === "ux" && <UxScorecard tasks={tasks} />}
+                  {activeTab === "metrics" && (
+                    <MetricsBar
+                      pipelineState={pipelineState}
+                      tasks={tasks}
+                    />
+                  )}
+                  {activeTab === "awards" && <AwardsPanel />}
+                  {activeTab === "knowledge" && (
+                    <ProjectKnowledge
+                      projectPath={currentConfig.projectPath}
+                      isRunning={isRunning}
+                    />
+                  )}
+                  {activeTab === "vision" && (
+                    <VisionPanel
+                      inspiration={currentConfig.inspiration}
+                      onUpdate={handleUpdateVision}
+                      isRunning={isRunning}
+                    />
+                  )}
+                </motion.div>
+              </AnimatePresence>
             </ErrorBoundary>
           </div>
         </div>
@@ -920,6 +971,9 @@ export function Dashboard({ config }: DashboardProps) {
             onClick={(e) => {
               if (e.target === e.currentTarget) setShowNewProjectConfirm(false);
             }}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") setShowNewProjectConfirm(false);
+            }}
           >
             <motion.div
               initial={{ opacity: 0, scale: 0.92, y: 10 }}
@@ -929,6 +983,7 @@ export function Dashboard({ config }: DashboardProps) {
               className="glass-panel w-full max-w-sm rounded-2xl p-6"
               role="dialog"
               aria-modal="true"
+              aria-label="New project confirmation"
             >
               <h3 className="text-sm font-bold uppercase tracking-wider text-text-primary">
                 New Project?

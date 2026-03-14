@@ -43,10 +43,10 @@ const CATEGORY_ICONS: Record<ToolCategory, string> = {
 };
 
 const CATEGORY_ACCENT: Record<ToolCategory, string> = {
-  "File Operations": "#00E5FF",
-  Shell: "#FFB800",
-  Git: "#B026FF",
-  Search: "#00FFA3",
+  "File Operations": "var(--color-accent)",
+  Shell: "var(--color-agent-ux)",
+  Git: "var(--color-accent-violet)",
+  Search: "var(--color-accent-emerald)",
 };
 
 const SPRING = { type: "spring" as const, stiffness: 300, damping: 26 };
@@ -99,7 +99,7 @@ export function ToolManager({ tools, onChange }: ToolManagerProps) {
                   onClick={() => toggleTool(meta.name, TOOL_TYPES.BUILTIN)}
                   className="flex w-full items-center gap-3 rounded-xl border border-white/[0.06] px-3 py-2 text-left backdrop-blur-sm transition-colors"
                   style={{
-                    background: entry.enabled ? "rgba(20, 21, 31, 0.6)" : "rgba(10, 11, 16, 0.4)",
+                    background: entry.enabled ? "var(--color-surface)" : "var(--color-void)",
                     opacity: entry.enabled ? 1 : 0.6,
                   }}
                   whileHover={{ y: -1, boxShadow: meta.dangerous && entry.enabled ? "0 0 12px rgba(239,68,68,0.1)" : "0 4px 16px rgba(0,0,0,0.2)" }}

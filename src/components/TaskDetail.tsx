@@ -114,6 +114,7 @@ export function TaskDetail({ task, onClose }: TaskDetailProps) {
           className="glass-panel relative mx-4 flex max-h-[85vh] w-full max-w-2xl flex-col rounded-2xl"
           role="dialog"
           aria-modal="true"
+          aria-label={`Task ${task.id}: ${task.title}`}
         >
           {/* Close button */}
           <motion.button
@@ -121,6 +122,7 @@ export function TaskDetail({ task, onClose }: TaskDetailProps) {
             whileTap={{ scale: 0.9 }}
             transition={SPRING}
             onClick={onClose}
+            aria-label="Close task detail"
             className="absolute right-3 top-3 z-10 rounded-lg p-1.5 text-text-muted transition-colors hover:bg-elevated hover:text-text-primary"
           >
             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -146,7 +148,7 @@ export function TaskDetail({ task, onClose }: TaskDetailProps) {
                 Cycle {task.cycle}
               </span>
             </div>
-            <h2 className="text-sm font-semibold text-text-primary">
+            <h2 className="truncate text-sm font-semibold text-text-primary">
               {task.title}
             </h2>
           </div>
@@ -168,12 +170,13 @@ export function TaskDetail({ task, onClose }: TaskDetailProps) {
                         key={file}
                         whileHover={{
                           scale: 1.03,
+                          // Inline rgba required — Framer Motion animate value
                           boxShadow: "0 0 10px rgba(0,229,255,0.1)",
                         }}
                         className="glass-panel flex items-center gap-1.5 rounded-lg px-2.5 py-1 font-mono text-[11px] text-text-secondary"
                       >
                         <span className="text-[10px]">{icon}</span>
-                        {file.split("/").pop()}
+                        <span className="truncate max-w-[200px]" title={file}>{file.split("/").pop()}</span>
                       </motion.span>
                     );
                   })}

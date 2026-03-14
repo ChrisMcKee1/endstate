@@ -7,10 +7,10 @@ const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
 const SPRING = { type: "spring" as const, stiffness: 200, damping: 22 };
 
 function meterStroke(pct: number): string {
-  if (pct < 50) return "#00FFA3";
-  if (pct < 75) return "#EAB308";
-  if (pct < 90) return "#F97316";
-  return "#EF4444";
+  if (pct < 50) return "var(--color-accent-emerald)";
+  if (pct < 75) return "var(--color-severity-medium)";
+  if (pct < 90) return "var(--color-severity-high)";
+  return "var(--color-severity-critical)";
 }
 
 interface ContextMeterProps {
@@ -38,7 +38,7 @@ export function ContextMeter({ usage, isCompacting, tokenCount, maxTokens }: Con
             cy={20}
             r={RING_RADIUS}
             fill="none"
-            stroke="rgba(255,255,255,0.04)"
+            stroke="var(--color-border-subtle)"
             strokeWidth={3}
           />
           {/* Progress ring */}
@@ -62,7 +62,7 @@ export function ContextMeter({ usage, isCompacting, tokenCount, maxTokens }: Con
               cy={20}
               r={RING_RADIUS}
               fill="none"
-              stroke="#00E5FF"
+              stroke="var(--color-accent)"
               strokeWidth={5}
               strokeLinecap="round"
               strokeDasharray={RING_CIRCUMFERENCE}

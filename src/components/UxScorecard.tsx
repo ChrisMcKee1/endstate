@@ -20,9 +20,9 @@ const UX_CATEGORIES = [
 const SPRING = { type: "spring" as const, stiffness: 260, damping: 26 };
 
 function scoreBarColor(score: number): string {
-  if (score >= 8) return "#00FFA3";
-  if (score >= 5) return "#EAB308";
-  return "#EF4444";
+  if (score >= 8) return "var(--color-accent-emerald)";
+  if (score >= 5) return "var(--color-severity-medium)";
+  return "var(--color-severity-critical)";
 }
 
 function scoreTextColor(score: number): string {
@@ -95,10 +95,10 @@ export function UxScorecard({ tasks }: UxScorecardProps) {
   const ringProgress = uxData.hasData ? (uxData.overallScore / 10) * RING_CIRCUMFERENCE : 0;
 
   return (
-    <div className={`flex h-full flex-col overflow-y-auto ${isGolden ? "animate-golden-glow" : ""}`}>
+    <div className={`flex h-full flex-col overflow-y-auto ${isGolden ? "animate-golden-glow" : ""}`} role="region" aria-label="UX Scorecard">
       {/* Overall score ring */}
       <div className="border-b border-white/[0.04] p-4 text-center">
-        <p className="mb-3 text-[10px] font-medium uppercase tracking-widest text-text-muted">
+        <p className="mb-3 text-[10px] uppercase tracking-widest text-text-muted">
           UX Score
         </p>
         {uxData.hasData ? (
@@ -111,7 +111,7 @@ export function UxScorecard({ tasks }: UxScorecardProps) {
                   cy={40}
                   r={RING_RADIUS}
                   fill="none"
-                  stroke="rgba(255,255,255,0.04)"
+                  stroke="var(--color-border-subtle)"
                   strokeWidth={4}
                 />
                 {/* Score ring */}
@@ -134,7 +134,7 @@ export function UxScorecard({ tasks }: UxScorecardProps) {
                     cy={40}
                     r={RING_RADIUS}
                     fill="none"
-                    stroke="#FFB800"
+                    stroke="var(--color-agent-ux)"
                     strokeWidth={6}
                     strokeLinecap="round"
                     strokeDasharray={RING_CIRCUMFERENCE}
@@ -176,14 +176,14 @@ export function UxScorecard({ tasks }: UxScorecardProps) {
         ) : (
           <div className="flex flex-col items-center gap-2 py-4">
             <span className="text-3xl">👁️</span>
-            <p className="text-xs text-text-muted">No UX review data yet</p>
-            <p className="text-[10px] text-text-muted/60">Scores appear after UX Reviewer runs</p>
+            <p className="text-xs text-text-secondary">Waiting for UX review</p>
+            <p className="text-[10px] text-text-muted/60">The UX Reviewer agent will score your app across {UX_CATEGORIES.length} categories when it runs</p>
           </div>
         )}
       </div>
 
       {/* Category scores */}
-      <div className="flex-1 p-3">
+      <div className="flex-1 px-4 py-3">
         {UX_CATEGORIES.map((cat, idx) => {
           const data = uxData.scores.find((s) => s.key === cat.key);
           const score = data?.score ?? 0;
@@ -229,13 +229,13 @@ export function UxScorecard({ tasks }: UxScorecardProps) {
         {uxData.hasData && (
           <motion.div
             key={verdictText(uxData.overallScore)}
-            className="border-t border-white/[0.04] p-3"
+            className="border-t border-white/[0.04] px-4 py-3"
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -8 }}
             transition={SPRING}
           >
-            <p className="text-[10px] font-medium uppercase tracking-widest text-text-muted">
+            <p className="text-[10px] uppercase tracking-widest text-text-muted">
               Verdict
             </p>
             <p className="mt-1 text-xs text-text-secondary">

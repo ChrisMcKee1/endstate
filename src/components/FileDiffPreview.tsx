@@ -62,10 +62,10 @@ function parseDiff(diff: string): { filePath: string; lines: DiffLine[] } {
 // ─── Line style map ─────────────────────────────────────────────────────────
 
 const LINE_STYLES: Record<DiffLine["type"], { row: string; border: string }> = {
-  add: { row: "bg-[#00FFA3]/[0.08]", border: "border-l-2 border-l-[#00FFA3]/60" },
-  remove: { row: "bg-[#EF4444]/[0.08]", border: "border-l-2 border-l-[#EF4444]/60" },
+  add: { row: "bg-accent-emerald/[0.08]", border: "border-l-2 border-l-accent-emerald/60" },
+  remove: { row: "bg-severity-critical/[0.08]", border: "border-l-2 border-l-severity-critical/60" },
   context: { row: "", border: "border-l-2 border-l-transparent" },
-  header: { row: "bg-[#B026FF]/[0.05]", border: "border-l-2 border-l-[#B026FF]/30" },
+  header: { row: "bg-accent-violet/[0.05]", border: "border-l-2 border-l-accent-violet/30" },
 };
 
 const LINE_TEXT_COLOR: Record<DiffLine["type"], string> = {
@@ -103,17 +103,14 @@ export function FileDiffPreview({ diff }: FileDiffPreviewProps) {
 
   return (
     <motion.div
-      className="overflow-hidden rounded-xl border border-white/[0.06] shadow-[0_8px_32px_rgba(0,0,0,0.3)] backdrop-blur-sm"
-      style={{ background: "rgba(20, 21, 31, 0.5)" }}
+      className="overflow-hidden rounded-xl border border-white/[0.06] shadow-[0_8px_32px_rgba(0,0,0,0.3)] backdrop-blur-sm bg-surface/50"
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={SPRING}
     >
       {/* File header */}
       {filePath && (
-        <div className="flex items-center gap-2 border-b border-white/[0.04] px-3 py-2"
-          style={{ background: "rgba(255,255,255,0.02)" }}
-        >
+        <div className="flex items-center gap-2 border-b border-white/[0.04] px-3 py-2 bg-white/[0.02]">
           <svg
             className="h-3.5 w-3.5 text-text-muted"
             fill="none"

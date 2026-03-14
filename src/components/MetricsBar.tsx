@@ -31,8 +31,10 @@ export function MetricsBar({ pipelineState, tasks }: MetricsBarProps) {
 
   // Poll metrics — every 5s for responsive updates
   useEffect(() => {
+    const controller = new AbortController();
+
     const fetchMetrics = () => {
-      fetch("/api/metrics")
+      fetch("/api/metrics", { signal: controller.signal })
         .then((r) => r.json())
         .then((data: { metrics?: MetricsSnapshot }) => {
           if (data.metrics) setMetrics(data.metrics);
@@ -42,7 +44,10 @@ export function MetricsBar({ pipelineState, tasks }: MetricsBarProps) {
 
     fetchMetrics();
     const interval = setInterval(fetchMetrics, 5_000);
-    return () => clearInterval(interval);
+    return () => {
+      controller.abort();
+      clearInterval(interval);
+    };
   }, []);
 
   const taskCounts = useMemo(() => {

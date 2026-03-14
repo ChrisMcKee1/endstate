@@ -34,6 +34,7 @@ const VENDOR_ICONS: Record<string, string> = {
   meta: "⚪",
 };
 
+// Vendor brand colors — intentionally hardcoded as vendor identity, not design tokens
 const VENDOR_COLORS: Record<string, string> = {
   anthropic: "rgba(255, 160, 60, 0.4)",
   openai: "rgba(0, 200, 100, 0.4)",
@@ -125,6 +126,38 @@ export function ModelSelector({ value, onChange }: ModelSelectorProps) {
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
+  // Keyboard navigation for dropdown
+  useEffect(() => {
+    if (!open || models.length === 0) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setOpen(false);
+        return;
+      }
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.preventDefault();
+        const currentIdx = models.findIndex((m) => m.id === value);
+        const nextIdx = e.key === "ArrowDown"
+          ? Math.min(currentIdx + 1, models.length - 1)
+          : Math.max(currentIdx - 1, 0);
+        onChange(models[nextIdx].id);
+        // Scroll into view
+        if (listRef.current) {
+          const el = listRef.current.querySelector(`[data-model-id="${CSS.escape(models[nextIdx].id)}"]`);
+          el?.scrollIntoView({ block: "nearest" });
+        }
+        return;
+      }
+      if (e.key === "Enter") {
+        e.preventDefault();
+        setOpen(false);
+      }
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [open, models, value, onChange]);
+
   const selected = models.find((m) => m.id === value);
 
   useEffect(() => {
@@ -153,6 +186,7 @@ export function ModelSelector({ value, onChange }: ModelSelectorProps) {
             exit={{ opacity: 0, y: -8 }}
             transition={SPRING}
             className="glass-panel glow-error mb-2 flex items-center gap-2 rounded-xl px-3 py-2"
+            role="alert"
           >
             <span className="text-xs text-severity-critical">
               Failed to load models: {fetchError}
@@ -211,7 +245,9 @@ export function ModelSelector({ value, onChange }: ModelSelectorProps) {
               whileTap={{ scale: 0.98 }}
               onClick={() => setOpen(!open)}
               disabled={loading}
-              className="glass-panel flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left transition-colors hover:border-border-active focus:border-accent/50 focus:outline-none"
+              className="glass-panel flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left transition-colors hover:border-border-active focus:border-accent/50 focus:outline-none focus-visible:ring-1 focus-visible:ring-accent/50"
+              aria-haspopup="listbox"
+              aria-expanded={open}
             >
               {loading ? (
                 <span className="text-xs text-text-muted">Loading models…</span>
@@ -262,6 +298,8 @@ export function ModelSelector({ value, onChange }: ModelSelectorProps) {
                   exit={{ opacity: 0, scale: 0.95, y: -4 }}
                   transition={SPRING}
                   className="glass-panel absolute z-50 mt-1.5 max-h-80 w-full overflow-y-auto rounded-xl"
+                  role="listbox"
+                  aria-label="Available models"
                 >
                   {models.map((model) => {
                     const vendorGlow = VENDOR_COLORS[model.vendor] ?? "rgba(200,200,200,0.3)";
@@ -280,6 +318,8 @@ export function ModelSelector({ value, onChange }: ModelSelectorProps) {
                         className={`flex w-full items-center gap-2.5 border-b border-border-subtle/50 px-3 py-2.5 text-left transition-colors ${
                           model.id === value ? "bg-accent/5" : ""
                         }`}
+                        role="option"
+                        aria-selected={model.id === value}
                       >
                         <span className="text-sm">
                           {VENDOR_ICONS[model.vendor] ?? "🤖"}

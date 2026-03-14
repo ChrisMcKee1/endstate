@@ -66,8 +66,7 @@ export function CustomAgentManager({ agents, onChange }: CustomAgentManagerProps
           <motion.button
             key="add-btn"
             onClick={() => setAdding(true)}
-            className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-white/[0.08] py-2.5 text-[10px] font-medium uppercase tracking-wider text-text-muted transition-colors hover:border-accent/30 hover:text-accent"
-            style={{ background: "rgba(10, 11, 16, 0.3)" }}
+            className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-white/[0.08] py-2.5 text-[10px] font-medium uppercase tracking-wider text-text-muted transition-colors hover:border-accent/30 hover:text-accent bg-void/30"
             whileTap={{ scale: 0.98 }}
             transition={SPRING}
           >
@@ -83,8 +82,8 @@ export function CustomAgentManager({ agents, onChange }: CustomAgentManagerProps
       <AnimatePresence>
         {adding && (
           <motion.div
-            className="rounded-xl border border-accent/20 p-4 backdrop-blur-sm"
-            style={{ background: "rgba(20, 21, 31, 0.6)", boxShadow: "0 0 20px rgba(0,229,255,0.05)" }}
+            className="rounded-xl border border-accent/20 p-4 backdrop-blur-sm bg-surface/60"
+            style={{ boxShadow: "0 0 20px rgba(0,229,255,0.05)" }}
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: "auto" }}
             exit={{ opacity: 0, height: 0 }}
@@ -134,8 +133,7 @@ export function CustomAgentManager({ agents, onChange }: CustomAgentManagerProps
       {/* Empty state */}
       {agents.length === 0 && !adding && (
         <motion.div
-          className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-white/[0.08] px-6 py-10 text-center"
-          style={{ background: "linear-gradient(135deg, rgba(0,229,255,0.03) 0%, rgba(176,38,255,0.03) 100%)" }}
+          className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-white/[0.08] px-6 py-10 text-center bg-[linear-gradient(135deg,var(--color-glass-cyan),rgba(176,38,255,0.03))]"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={SPRING}
@@ -154,7 +152,7 @@ export function CustomAgentManager({ agents, onChange }: CustomAgentManagerProps
           key={agent.name}
           className="rounded-xl border border-white/[0.06] backdrop-blur-sm"
           style={{
-            background: agent.enabled ? "rgba(20, 21, 31, 0.6)" : "rgba(10, 11, 16, 0.4)",
+            background: agent.enabled ? "var(--color-surface)" : "var(--color-void)",
             opacity: agent.enabled ? 1 : 0.6,
           }}
           initial={{ opacity: 0, y: 12 }}
@@ -210,8 +208,7 @@ export function CustomAgentManager({ agents, onChange }: CustomAgentManagerProps
                   <AnimatePresence>
                     {expandedPrompt === agent.name && (
                       <motion.pre
-                        className="mt-2 max-h-40 overflow-auto rounded-xl border border-white/[0.04] p-3 font-mono text-[10px] leading-relaxed text-text-secondary"
-                        style={{ background: "rgba(10, 11, 16, 0.5)" }}
+                        className="mt-2 max-h-40 overflow-auto rounded-xl border border-white/[0.04] p-3 font-mono text-[10px] leading-relaxed text-text-secondary bg-void/50"
                         initial={{ opacity: 0, height: 0 }}
                         animate={{ opacity: 1, height: "auto" }}
                         exit={{ opacity: 0, height: 0 }}
